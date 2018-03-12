@@ -568,9 +568,8 @@ connect_to_websocket_server_async (void)
   app_state = SERVER_CONNECTING;
 }
 
-static gboolean
-check_plugins (void)
-{
+static gboolean check_plugins (void){
+
   int i;
   gboolean ret;
   GstPlugin *plugin;
@@ -592,8 +591,7 @@ check_plugins (void)
   return ret;
 }
 
-int
-main (int argc, char *argv[])
+int main (int argc, char *argv[])
 {
   SoupSession *session;
   GOptionContext *context;

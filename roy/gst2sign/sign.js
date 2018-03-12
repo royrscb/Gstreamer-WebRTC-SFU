@@ -17,17 +17,26 @@ wss.on('connection', function(ws, req) {
 
   var ip = req.connection.remoteAddress;
 
+  ws.send("cabron bona conectada");
+
   console.log("new one "+ ip);
 
     ws.on('message', function(message) {
-        console.log('received: %s', message);
+        console.log("Received from "+ip+" :"+message);
+
         wss.broadcast("From "+ip+" :"+message);
-        ws.send("Your msg: "+message);
+
     });
 });
 
 
-
+wss.broadcast = function broadcast(data) {
+  wss.clients.forEach(function each(client) {
+    if (client.readyState === WebSocket.OPEN) {
+      client.send(data);
+    }
+  });
+};
 
 
 
