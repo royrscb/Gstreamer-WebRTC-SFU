@@ -16,43 +16,19 @@ var ws_conn;
 var local_stream;
 var peer_id;
 
-function getOurId() {
-    return Math.floor(Math.random() * (9000 - 10) + 10).toString();
-}
-
-function resetState() {
-    // This will call onServerClose()
-    ws_conn.close();
-}
-
-function handleIncomingError(error) {
-    setStatus("ERROR: " + error);
-    resetState();
-}
-
-function getVideoElement() {
-    return document.getElementById("stream");
-}
 
 function setStatus(text) {
     console.log(text);
     document.getElementById("status").textContent = text;
 }
 
-function resetVideoElement() {
-    var videoElement = getVideoElement();
-    videoElement.pause();
-    videoElement.src = "";
-    videoElement.load();
-}
-
 // SDP offer received from peer, set remote description and create an answer
 function onIncomingSDP(sdp) {
     console.log("Incoming SDP is "+ JSON.stringify(sdp));
+    
     peer_connection.setRemoteDescription(sdp).then(() => {
         setStatus("Remote SDP set");
-        if (sdp.type != "offer")
-            return;
+        if (sdp.type != "offer") return;
         setStatus("Got SDP offer, creating answer");
         peer_connection.createAnswer().then(onLocalDescription).catch(setStatus);
     }).catch(setStatus);
@@ -81,21 +57,11 @@ function onServerMessage(event) {
             setStatus("Registered with server, waiting for call");
             return;
         default:
-            if (event.data.startsWith("ERROR")) {
-                handleIncomingError(event.data);
-                return;
-            }
+            
             // Handle incoming JSON SDP and ICE messages
-            try {
-                msg = JSON.parse(event.data);
-            } catch (e) {
-                if (e instanceof SyntaxError) {
-                    handleIncomingError("Error parsing incoming JSON: " + event.data);
-                } else {
-                    handleIncomingError("Unknown error parsing response: " + event.data);
-                }
-                return;
-            }
+     
+            msg = JSON.parse(event.data);
+            
 
             // Incoming JSON signals the beginning of a call
             if (peer_connection == null)
@@ -105,14 +71,16 @@ function onServerMessage(event) {
                 onIncomingSDP(msg.sdp);
             } else if (msg.ice != null) {
                 onIncomingICE(msg.ice);
-            } else {
-                handleIncomingError("Unknown incoming JSON: " + msg);
             }
     }
 }
 
 function onServerClose(event) {
-    resetVideoElement();
+    
+    var videoElement = document.getElementById("stream");
+    videoElement.pause();
+    videoElement.src = "";
+    videoElement.load();
 
     if (peer_connection != null) {
         peer_connection.close();
@@ -135,7 +103,7 @@ function websocketServerConnect() {
         setStatus("Too many connection attempts, aborting. Refresh page to try again");
         return;
     }
-    peer_id = getOurId();
+    peer_id = Math.floor(Math.random() * (9000 - 10) + 10).toString();
     setStatus("Connecting to server");
     loc = null;
     if (window.location.protocol.startsWith ("file")) {
@@ -174,9 +142,7 @@ function onRemoteStreamAdded(event) {
 
     if (videoTracks.length > 0) {
         console.log('Incoming stream: ' + videoTracks.length + ' video tracks and ' + audioTracks.length + ' audio tracks');
-        getVideoElement().srcObject = event.stream;
-    } else {
-        handleIncomingError('Stream with unknown tracks added, resetting');
+        document.getElementById("stream").srcObject = event.stream;
     }
 }
 
