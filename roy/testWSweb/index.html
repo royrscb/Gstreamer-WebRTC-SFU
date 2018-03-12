@@ -1,0 +1,24 @@
+<htlm>
+<head>
+</head>
+
+<body>
+    
+    <script>
+
+  
+        serverConnection = new WebSocket('ws://127.0.0.1:3434');
+        serverConnection.onmessage = gotMessageFromServer;
+
+        function gotMessageFromServer(message) {
+
+            console.log(message);
+            console.log(message.data);
+        
+        }
+        
+    </script>
+</body>
+
+
+</htlm>
