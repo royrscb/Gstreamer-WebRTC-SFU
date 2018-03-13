@@ -31,7 +31,7 @@ process.openStdin().addListener("data", function(d) {
 
 		}else if(sockets[txt[0]]!=undefined) {
 			sockets[txt[0]].ws.send("~~~From sign server: "+txt.substring(1,txt.length)); 
-			console.log(">>>Sending to "+txt[0]+":"+txt.substring(1,txt.length));
+			console.log(">>>Sending to "+txt[0]+": "+txt.substring(1,txt.length));
 		}
 
 	}else webServerSocket.broadcast("~~~From sign server: "+txt);
@@ -50,10 +50,11 @@ webServerSocket.on('connection', function(ws, req) {
   ws.send("Your id is "+id);
   webServerSocket.broadcast("^^^Conected "+id+"="+ip);
 
+
   ws.on('message', function(message) {
       
-      console.log("<<<Message from "+id+"="+" :"+message);
-      webServerSocket.broadcast(">>>From "+id+"="+" :"+message);
+      console.log("<<<Message from "+id+": "+message);
+      webServerSocket.broadcast(">>>From "+id+": "+message);
   });
 
 
