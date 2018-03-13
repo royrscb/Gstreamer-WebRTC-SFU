@@ -1,84 +1,56 @@
+//Roy Ros Cobo
+
+//---------REQUIRES--------------
 const WebSocket = require('ws');
 
 
 var port = 3434;
 
-const wss = new WebSocket.Server({ port: port });
-
+const webServerSocket = new WebSocket.Server({ port: port });
 console.log("New server on port "+port);
 
-wss.broadcast = function(data) {
-    for(var i in this.clients) {
-        this.clients[i].send(data);
-    }
-};
 
-wss.on('connection', function(ws, req) {
+var sockets = [];
+
+//--------------txt processing----------------------------
+process.openStdin().addListener("data", function(d) {
+
+	var txt = d.toString().trim();
+
+	if(txt==""){
+		console.log("LIST OF SOCKETS\n------------------------------");
+		for (var i = 0; i < sockets.length; i++) console.log(i+": "+sockets[i].ip);
+
+	}else if("0"<=txt[0] && txt[0]<="9") sockets[txt[0]].ws.send("~~~From sign server: "+txt.substring(1,txt.length)); 
+	else webServerSocket.broadcast("~~~From sign server: "+txt);
+
+});
+
+
+//----------------------Connections handle------------------
+webServerSocket.on('connection', function(ws, req) {
 
   var ip = req.connection.remoteAddress;
+  sockets.push({ws:ws, ip:ip})
 
-  ws.send("cabron bona conectada");
-
-  console.log("new one "+ ip);
+  console.log("^^^Conected "+ ip);
+  webServerSocket.broadcast("^^^Conected "+ ip);
 
     ws.on('message', function(message) {
-        console.log("Received from "+ip+" :"+message);
-
-        wss.broadcast("From "+ip+" :"+message);
-
+        
+        console.log("<<<Message from "+ip+" :"+message);
+        webServerSocket.broadcast("<<<Message from "+ip+" :"+message);
     });
 });
 
 
-wss.broadcast = function broadcast(data) {
-  wss.clients.forEach(function each(client) {
+
+//----------Functions------------------
+webServerSocket.broadcast = function broadcast(data) {
+  webServerSocket.clients.forEach(function each(client) {
     if (client.readyState === WebSocket.OPEN) {
+      
       client.send(data);
     }
   });
 };
-
-
-
-
-/*
-
-
-io.sockets.on('connection', function (socket){
-
-  usuarisConnectats.push(socket.id); //s'ha connectat un usuari, socket.id té l'identificador
-  console.log("USUARI ID -> " + socket.id + " || CONNECT");
-  if (usuarisConnectats.length > 1){ //quan els dos usuaris s'han connectat al server
-    
-    usuari1 = usuarisConnectats[0];
-    usuari2 = usuarisConnectats[1];
-    
-    io.to(usuari1).emit('message', {type:'newUser', msg:usuari2}); //enviem info de user1 -> user2
-    io.to(usuari2).emit('message', {type:'newUser', msg:usuari1}); //enviem info de user2 -> user1
-  }
-  // data is an object with receiver socket id and the message
-  socket.on('message', function (message) {
-    console.log(message);
-    console.log('-------------------------------------------------------------------------');
-    socket.to(message.to).emit('message', message);
-  });
-  
-  socket.on('disconnect', function (message) {
-    console.log("USUARI ID -> " + socket.id + " || DISCONNECT");
-
-    if(usuari1 == socket.id) io.to(usuari2).emit('message', {type:'hangup'});
-    else io.to(usuari1).emit('message', {type:'hangup'});
-    
-    usuarisDesconnectats ++;
-    
-    if(usuarisDesconnectats > 1){
-      //tots els usuaris s'han desconnectat
-      console.log("DELETE USERS FROM USER LIST");
-      usuarisDesconnectats = 0;
-      usuarisConnectats = [];
-    }
-  });
-});
-
-
-*/
