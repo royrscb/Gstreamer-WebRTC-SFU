@@ -1,8 +1,16 @@
-#include <stdio.h>
-#include <stdlib.h>
+//Roy Ros Cobo
 
-#include <glib.h>
+#include <gst/gst.h>
+#include <gst/sdp/sdp.h>
+
+//#define GST_USE_UNSTABLE_API
+//#include <gst/webrtc/webrtc.h>
+
+/* For signalling */
 #include <libsoup/soup.h>
+#include <json-glib/json-glib.h>
+
+#include <string.h>
 
 
 const char* url_sign_server = "wss://127.0.0.1:3434";
@@ -12,6 +20,25 @@ GMainLoop *loop = NULL;
 
 
 
+
+static gchar* get_string_from_json_object (JsonObject * object){
+
+  JsonNode *root;
+  JsonGenerator *generator;
+  gchar *text;
+
+  /* Make it the root node */
+  root = json_node_init_object (json_node_alloc (), object);
+  generator = json_generator_new ();
+  json_generator_set_root (generator, root);
+  text = json_generator_to_data (generator, NULL);
+
+  /* Release everything */
+  g_object_unref (generator);
+  json_node_free (root);
+  
+  return text;
+}
 
 
 //------------------------------Websocket to signalling server connection--------------------------------------
@@ -71,7 +98,11 @@ static gboolean connect_webSocket_signServer(){
 
 int main(void){
 
-  loop = g_main_loop_new (NULL, FALSE);
+
+
+
+
+  /*loop = g_main_loop_new (NULL, FALSE);
 
 
   connect_webSocket_signServer();
@@ -79,7 +110,7 @@ int main(void){
   g_main_loop_run (loop);
 
 
-  g_main_loop_unref(loop);
+  g_main_loop_unref(loop);*/
 
-  return EXIT_SUCCESS;
+  return 0;
 }

@@ -46,28 +46,21 @@ static enum AppState app_state = 0;
 static const gchar *peer_id = NULL;
 static const gchar *server_url = "wss://webrtc.nirbheek.in:8443";
 
-static GOptionEntry entries[] =
-{
+static GOptionEntry entries[] ={
+
   { "peer-id", 0, 0, G_OPTION_ARG_STRING, &peer_id, "String ID of the peer to connect to", "ID" },
   { "server", 0, 0, G_OPTION_ARG_STRING, &server_url, "Signalling server to connect to", "URL" },
   { NULL },
 };
 
-static gboolean
-cleanup_and_quit_loop (const gchar * msg, enum AppState state)
-{
-  if (msg)
-    g_printerr ("%s\n", msg);
-  if (state > 0)
-    app_state = state;
+static gboolean cleanup_and_quit_loop (const gchar * msg, enum AppState state){
+
+  if (msg) g_printerr ("%s\n", msg);
+  if (state > 0) app_state = state;
 
   if (ws_conn) {
-    if (soup_websocket_connection_get_state (ws_conn) ==
-        SOUP_WEBSOCKET_STATE_OPEN)
-      /* This will call us again */
-      soup_websocket_connection_close (ws_conn, 1000, "");
-    else
-      g_object_unref (ws_conn);
+    if (soup_websocket_connection_get_state (ws_conn) == SOUP_WEBSOCKET_STATE_OPEN) soup_websocket_connection_close (ws_conn, 1000, "");
+    else g_object_unref (ws_conn);
   }
 
   if (loop) {
@@ -79,9 +72,8 @@ cleanup_and_quit_loop (const gchar * msg, enum AppState state)
   return G_SOURCE_REMOVE;
 }
 
-static gchar*
-get_string_from_json_object (JsonObject * object)
-{
+static gchar* get_string_from_json_object (JsonObject * object){
+
   JsonNode *root;
   JsonGenerator *generator;
   gchar *text;
@@ -98,10 +90,8 @@ get_string_from_json_object (JsonObject * object)
   return text;
 }
 
-static void
-handle_media_stream (GstPad * pad, GstElement * pipe, const char * convert_name,
-    const char * sink_name)
-{
+static void handle_media_stream (GstPad * pad, GstElement * pipe, const char * convert_name, const char * sink_name){
+
   GstPad *qpad;
   GstElement *q, *conv, *sink;
   GstPadLinkReturn ret;
@@ -127,9 +117,8 @@ handle_media_stream (GstPad * pad, GstElement * pipe, const char * convert_name,
 }
 
 static void
-on_incoming_decodebin_stream (GstElement * decodebin, GstPad * pad,
-    GstElement * pipe)
-{
+on_incoming_decodebin_stream (GstElement * decodebin, GstPad * pad, GstElement * pipe){
+
   GstCaps *caps;
   const gchar *name;
 
@@ -151,9 +140,8 @@ on_incoming_decodebin_stream (GstElement * decodebin, GstPad * pad,
   }
 }
 
-static void
-on_incoming_stream (GstElement * webrtc, GstPad * pad, GstElement * pipe)
-{
+static void on_incoming_stream (GstElement * webrtc, GstPad * pad, GstElement * pipe){
+
   GstElement *decodebin;
 
   if (GST_PAD_DIRECTION (pad) != GST_PAD_SRC)
@@ -167,10 +155,8 @@ on_incoming_stream (GstElement * webrtc, GstPad * pad, GstElement * pipe)
   gst_element_link (webrtc, decodebin);
 }
 
-static void
-send_ice_candidate_message (GstElement * webrtc G_GNUC_UNUSED, guint mlineindex,
-    gchar * candidate, gpointer user_data G_GNUC_UNUSED)
-{
+static void send_ice_candidate_message (GstElement * webrtc G_GNUC_UNUSED, guint mlineindex, gchar * candidate, gpointer user_data G_GNUC_UNUSED){
+
   gchar *text;
   JsonObject *ice, *msg;
 
@@ -191,9 +177,8 @@ send_ice_candidate_message (GstElement * webrtc G_GNUC_UNUSED, guint mlineindex,
   g_free (text);
 }
 
-static void
-send_sdp_offer (GstWebRTCSessionDescription * offer)
-{
+static void send_sdp_offer (GstWebRTCSessionDescription * offer){
+
   gchar *text;
   JsonObject *msg, *sdp;
 
@@ -220,9 +205,8 @@ send_sdp_offer (GstWebRTCSessionDescription * offer)
 }
 
 /* Offer created by our pipeline, to be sent to the peer */
-static void
-on_offer_created (GstPromise * promise, gpointer user_data)
-{
+static void on_offer_created (GstPromise * promise, gpointer user_data){
+
   GstWebRTCSessionDescription *offer = NULL;
   const GstStructure *reply;
   gchar *desc;
@@ -245,9 +229,8 @@ on_offer_created (GstPromise * promise, gpointer user_data)
   gst_webrtc_session_description_free (offer);
 }
 
-static void
-on_negotiation_needed (GstElement * element, gpointer user_data)
-{
+static void on_negotiation_needed (GstElement * element, gpointer user_data){
+
   GstPromise *promise;
 
   app_state = PEER_CALL_NEGOTIATING;
@@ -260,8 +243,8 @@ on_negotiation_needed (GstElement * element, gpointer user_data)
 #define RTP_CAPS_VP8 "application/x-rtp,media=video,encoding-name=VP8,payload="
 
 static gboolean
-start_pipeline (void)
-{
+start_pipeline (void){
+
   GstStateChangeReturn ret;
   GError *error = NULL;
 
@@ -312,9 +295,8 @@ err:
   return FALSE;
 }
 
-static gboolean
-setup_call (void)
-{
+static gboolean setup_call (void){
+
   gchar *msg;
 
   if (soup_websocket_connection_get_state (ws_conn) !=
@@ -332,9 +314,8 @@ setup_call (void)
   return TRUE;
 }
 
-static gboolean
-register_with_server (void)
-{
+static gboolean register_with_server (void){
+
   gchar *hello;
   gint32 our_id;
 
@@ -355,19 +336,15 @@ register_with_server (void)
   return TRUE;
 }
 
-static void
-on_server_closed (SoupWebsocketConnection * conn G_GNUC_UNUSED,
-    gpointer user_data G_GNUC_UNUSED)
-{
+static void on_server_closed (SoupWebsocketConnection * conn G_GNUC_UNUSED, gpointer user_data G_GNUC_UNUSED){
+
   app_state = SERVER_CLOSED;
   cleanup_and_quit_loop ("Server connection closed", 0);
 }
 
 /* One mega message handler for our asynchronous calling mechanism */
-static void
-on_server_message (SoupWebsocketConnection * conn, SoupWebsocketDataType type,
-    GBytes * message, gpointer user_data)
-{
+static void on_server_message (SoupWebsocketConnection * conn, SoupWebsocketDataType type, GBytes * message, gpointer user_data){
+
   gsize size;
   gchar *text, *data;
 
@@ -513,10 +490,8 @@ out:
   g_free (text);
 }
 
-static void
-on_server_connected (SoupSession * session, GAsyncResult * res,
-    SoupMessage *msg)
-{
+static void on_server_connected (SoupSession * session, GAsyncResult * res, SoupMessage *msg){
+
   GError *error = NULL;
 
   ws_conn = soup_session_websocket_connect_finish (session, res, &error);
@@ -538,12 +513,10 @@ on_server_connected (SoupSession * session, GAsyncResult * res,
   register_with_server ();
 }
 
-/*
- * Connect to the signalling server. This is the entrypoint for everything else.
- */
-static void
-connect_to_websocket_server_async (void)
-{
+
+// Connect to the signalling server. This is the entrypoint for everything else.
+static void connect_to_websocket_server_async (void){
+
   SoupLogger *logger;
   SoupMessage *message;
   SoupSession *session;
@@ -591,8 +564,8 @@ static gboolean check_plugins (void){
   return ret;
 }
 
-int main (int argc, char *argv[])
-{
+int main (int argc, char *argv[]){
+
   SoupSession *session;
   GOptionContext *context;
   GError *error = NULL;
