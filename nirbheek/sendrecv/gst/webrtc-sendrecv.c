@@ -500,18 +500,11 @@ int main (int argc, char *argv[]){
 
   g_option_context_add_main_entries (context, entries, NULL);
   g_option_context_add_group (context, gst_init_get_option_group ());
-  if (!g_option_context_parse (context, &argc, &argv, &error)) {
-
-    g_printerr ("Error initializing: %s\n", error->message);
-    return -1;
-  }
+  if (!g_option_context_parse (context, &argc, &argv, &error)) { g_printerr ("Error initializing: %s\n", error->message); return -1;}
 
   if (!check_plugins ()) return -1;
 
-  if (!peer_id) {
-    g_printerr ("--peer-id is a required argument\n");
-    return -1;
-  }
+  if (!peer_id) { g_printerr ("--peer-id is a required argument\n"); return -1;}
 
 
   

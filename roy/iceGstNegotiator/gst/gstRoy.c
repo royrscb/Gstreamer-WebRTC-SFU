@@ -3,8 +3,8 @@
 #include <gst/gst.h>
 #include <gst/sdp/sdp.h>
 
-//#define GST_USE_UNSTABLE_API
-//#include <gst/webrtc/webrtc.h>
+#define GST_USE_UNSTABLE_API
+#include <gst/webrtc/webrtc.h>
 
 /* For signalling */
 #include <libsoup/soup.h>
@@ -41,7 +41,7 @@ static gchar* get_string_from_json_object (JsonObject * object){
 }
 
 
-//------------------------------Websocket to signalling server connection--------------------------------------
+///////Websocket to signalling server connection///////////////////////////////////////////////////////////
 
 static void on_message(SoupWebsocketConnection *ws, SoupWebsocketDataType type, GBytes *message, gpointer user_data){
 
@@ -62,7 +62,6 @@ static void on_closed (SoupWebsocketConnection *ws, gpointer user_data){
   g_print("websocket closed\n");
   g_main_loop_quit(loop);
 }
-
 
 
 static void on_sign_server_connected(GObject *object, GAsyncResult *result, gpointer user_data){
