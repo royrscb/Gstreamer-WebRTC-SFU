@@ -10,12 +10,16 @@ const char* url_sign_server = "wss://127.0.0.1:3434";
 GMainLoop *loop = NULL;
 
 
+
+
+
+
+//------------------------------Websocket to signalling server connection--------------------------------------
+
 static void on_message(SoupWebsocketConnection *ws, SoupWebsocketDataType type, GBytes *message, gpointer user_data){
 
   const char *contents;
   gsize len;
-
-  //g_print("websocket message received\n");
 
   if (type == SOUP_WEBSOCKET_DATA_TEXT) {
 
@@ -34,23 +38,21 @@ static void on_closed (SoupWebsocketConnection *ws, gpointer user_data){
 
 
 
+static void finish_webSocket_sign_connection(GObject *object, GAsyncResult *result, gpointer user_data){
 
-
-static void ready_to_finish_connect(GObject *object, GAsyncResult *result, gpointer user_data){
-
-  SoupWebsocketConnection *connection;
+  SoupWebsocketConnection *ws_conn;
   GError *error = NULL;
 
-  connection = soup_session_websocket_connect_finish(SOUP_SESSION(object), result, &error);
+  ws_conn = soup_session_websocket_connect_finish(SOUP_SESSION(object), result, &error);
 
 
-  g_signal_connect(connection, "closed",  G_CALLBACK(on_closed),  NULL);
-  g_signal_connect(connection, "message", G_CALLBACK(on_message), NULL);
+  g_signal_connect(ws_conn, "closed",  G_CALLBACK(on_closed),  NULL);
+  g_signal_connect(ws_conn, "message", G_CALLBACK(on_message), NULL);
 
-  soup_websocket_connection_send_text(connection, "WebSocket rocks");
+  soup_websocket_connection_send_text(ws_conn, "WebSocket rocks");
 }
 
-static gboolean websocket_start(){
+static gboolean connect_webSocket_signServer(){
 
   SoupSession *session;
   SoupMessage *msg;
@@ -61,7 +63,7 @@ static gboolean websocket_start(){
  
   msg = soup_message_new(SOUP_METHOD_GET, url_sign_server);
 
-  soup_session_websocket_connect_async(session, msg, NULL, (char **)NULL, NULL, ready_to_finish_connect, NULL);
+  soup_session_websocket_connect_async(session, msg, NULL, (char **)NULL, NULL, finish_webSocket_sign_connection, NULL);
 
 
 	return TRUE;
@@ -72,7 +74,7 @@ int main(void){
   loop = g_main_loop_new (NULL, FALSE);
 
 
-  websocket_start();
+  connect_webSocket_signServer();
 
   g_main_loop_run (loop);
 
