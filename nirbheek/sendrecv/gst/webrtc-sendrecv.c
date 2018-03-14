@@ -116,8 +116,7 @@ static void handle_media_stream (GstPad * pad, GstElement * pipe, const char * c
   g_assert_cmphex (ret, ==, GST_PAD_LINK_OK);
 }
 
-static void
-on_incoming_decodebin_stream (GstElement * decodebin, GstPad * pad, GstElement * pipe){
+static void on_incoming_decodebin_stream (GstElement * decodebin, GstPad * pad, GstElement * pipe){
 
   GstCaps *caps;
   const gchar *name;
@@ -295,45 +294,17 @@ err:
   return FALSE;
 }
 
-static gboolean setup_call (void){
+static void register_with_server (void){
 
-  gchar *msg;
-
-  if (soup_websocket_connection_get_state (ws_conn) !=
-      SOUP_WEBSOCKET_STATE_OPEN)
-    return FALSE;
-
-  if (!peer_id)
-    return FALSE;
-
-  g_print ("Setting up signalling server call with %s\n", peer_id);
-  app_state = PEER_CONNECTING;
-  msg = g_strdup_printf ("SESSION %s", peer_id);
-  soup_websocket_connection_send_text (ws_conn, msg);
-  g_free (msg);
-  return TRUE;
-}
-
-static gboolean register_with_server (void){
-
-  gchar *hello;
   gint32 our_id;
-
-  if (soup_websocket_connection_get_state (ws_conn) !=
-      SOUP_WEBSOCKET_STATE_OPEN)
-    return FALSE;
 
   our_id = g_random_int_range (10, 10000);
   g_print ("Registering id %i with server\n", our_id);
   app_state = SERVER_REGISTERING;
 
-  /* Register with the server with a random integer id. Reply will be received
-   * by on_server_message() */
-  hello = g_strdup_printf ("HELLO %i", our_id);
-  soup_websocket_connection_send_text (ws_conn, hello);
-  g_free (hello);
+  // Register with the server with a random integer id. Reply will be received by on_server_message() 
+  soup_websocket_connection_send_text (ws_conn, g_strdup_printf ("HELLO %i", our_id));
 
-  return TRUE;
 }
 
 static void on_server_closed (SoupWebsocketConnection * conn G_GNUC_UNUSED, gpointer user_data G_GNUC_UNUSED){
@@ -348,88 +319,49 @@ static void on_server_message (SoupWebsocketConnection * conn, SoupWebsocketData
   gsize size;
   gchar *text, *data;
 
-  switch (type) {
-    case SOUP_WEBSOCKET_DATA_BINARY:
-      g_printerr ("Received unknown binary message, ignoring\n");
-      g_bytes_unref (message);
-      return;
-    case SOUP_WEBSOCKET_DATA_TEXT:
-      data = g_bytes_unref_to_data (message, &size);
-      /* Convert to NULL-terminated string */
-      text = g_strndup (data, size);
-      g_free (data);
-      break;
-    default:
-      g_assert_not_reached ();
-  }
+
+  if(type == SOUP_WEBSOCKET_DATA_TEXT){
+
+    data = g_bytes_unref_to_data (message, &size);
+    /* Convert to NULL-terminated string */
+    text = g_strndup (data, size);
+    g_free (data);
+
+  }else g_assert_not_reached ();
+
 
   /* Server has accepted our registration, we are ready to send commands */
   if (g_strcmp0 (text, "HELLO") == 0) {
-    if (app_state != SERVER_REGISTERING) {
-      cleanup_and_quit_loop ("ERROR: Received HELLO when not registering",
-          APP_STATE_ERROR);
-      goto out;
-    }
-    app_state = SERVER_REGISTERED;
+
+    app_state = SERVER_REGISTERED;//before was SERVER_REGISTERING~~~~~~~~~~~~
     g_print ("Registered with server\n");
     /* Ask signalling server to connect us with a specific peer */
-    if (!setup_call ()) {
-      cleanup_and_quit_loop ("ERROR: Failed to setup call", PEER_CALL_ERROR);
-      goto out;
-    }
-  /* Call has been setup by the server, now we can start negotiation */
-  } else if (g_strcmp0 (text, "SESSION_OK") == 0) {
-    if (app_state != PEER_CONNECTING) {
-      cleanup_and_quit_loop ("ERROR: Received SESSION_OK when not calling",
-          PEER_CONNECTION_ERROR);
-      goto out;
-    }
+    g_print ("Setting up signalling server call with %s\n", peer_id);
+    app_state = PEER_CONNECTING;//before was SERVER_REGISTERED~~~~~~~~~~~~
+    soup_websocket_connection_send_text (ws_conn, g_strdup_printf ("SESSION %s", peer_id));
 
-    app_state = PEER_CONNECTED;
+  /* Call has been setup by the server, now we can start negotiation */
+  }else if (g_strcmp0 (text, "SESSION_OK") == 0) {
+
+    app_state = PEER_CONNECTED; //before was PEER_CONNECTING~~~~~~~~~~~~
     /* Start negotiation (exchange SDP and ICE candidates) */
-    if (!start_pipeline ())
-      cleanup_and_quit_loop ("ERROR: failed to start pipeline",
-          PEER_CALL_ERROR);
+    if (!start_pipeline ()) cleanup_and_quit_loop ("ERROR: failed to start pipeline", PEER_CALL_ERROR);
   /* Handle errors */
-  } else if (g_str_has_prefix (text, "ERROR")) {
-    switch (app_state) {
-      case SERVER_CONNECTING:
-        app_state = SERVER_CONNECTION_ERROR;
-        break;
-      case SERVER_REGISTERING:
-        app_state = SERVER_REGISTRATION_ERROR;
-        break;
-      case PEER_CONNECTING:
-        app_state = PEER_CONNECTION_ERROR;
-        break;
-      case PEER_CONNECTED:
-      case PEER_CALL_NEGOTIATING:
-        app_state = PEER_CALL_ERROR;
-      default:
-        app_state = APP_STATE_ERROR;
-    }
-    cleanup_and_quit_loop (text, 0);
-  /* Look for JSON messages containing SDP and ICE candidates */
-  } else {
+  }else if (g_str_has_prefix (text, "ERROR")) g_print("Error sent from server\n");
+  else {
+    /* Look for JSON messages containing SDP and ICE candidates */
     JsonNode *root;
     JsonObject *object;
     JsonParser *parser = json_parser_new ();
-    if (!json_parser_load_from_data (parser, text, -1, NULL)) {
-      g_printerr ("Unknown message '%s', ignoring", text);
-      g_object_unref (parser);
-      goto out;
-    }
+    if (!json_parser_load_from_data (parser, text, -1, NULL))   { g_printerr ("Unknown message '%s', ignoring", text); g_object_unref (parser); g_free (text);}
 
     root = json_parser_get_root (parser);
-    if (!JSON_NODE_HOLDS_OBJECT (root)) {
-      g_printerr ("Unknown json message '%s', ignoring", text);
-      g_object_unref (parser);
-      goto out;
-    }
+    if (!JSON_NODE_HOLDS_OBJECT (root))                         { g_printerr ("Unknown json message '%s', ignoring", text); g_object_unref (parser); g_free (text);}
 
     object = json_node_get_object (root);
     /* Check type of JSON message */
     if (json_object_has_member (object, "sdp")) {
+
       int ret;
       const gchar *text;
       GstSDPMessage *sdp;
@@ -441,8 +373,7 @@ static void on_server_message (SoupWebsocketConnection * conn, SoupWebsocketData
       /* In this example, we always create the offer and receive one answer.
        * See tests/examples/webrtcbidirectional.c in gst-plugins-bad for how to
        * handle offers from peers and reply with answers using webrtcbin. */
-      g_assert_cmpstr (json_object_get_string_member (object, "type"), ==,
-          "answer");
+      g_assert_cmpstr (json_object_get_string_member (object, "type"), ==, "answer");
 
       text = json_object_get_string_member (object, "sdp");
 
@@ -454,15 +385,13 @@ static void on_server_message (SoupWebsocketConnection * conn, SoupWebsocketData
       ret = gst_sdp_message_parse_buffer (text, strlen (text), sdp);
       g_assert_cmphex (ret, ==, GST_SDP_OK);
 
-      answer = gst_webrtc_session_description_new (GST_WEBRTC_SDP_TYPE_ANSWER,
-          sdp);
+      answer = gst_webrtc_session_description_new (GST_WEBRTC_SDP_TYPE_ANSWER, sdp);
       g_assert_nonnull (answer);
 
       /* Set remote description on our pipeline */
       {
         GstPromise *promise = gst_promise_new ();
-        g_signal_emit_by_name (webrtc1, "set-remote-description", answer,
-            promise);
+        g_signal_emit_by_name (webrtc1, "set-remote-description", answer, promise);
         gst_promise_interrupt (promise);
         gst_promise_unref (promise);
       }
@@ -478,15 +407,12 @@ static void on_server_message (SoupWebsocketConnection * conn, SoupWebsocketData
       sdpmlineindex = json_object_get_int_member (ice, "sdpMLineIndex");
 
       /* Add ice candidate sent by remote peer */
-      g_signal_emit_by_name (webrtc1, "add-ice-candidate", sdpmlineindex,
-          candidate);
-    } else {
-      g_printerr ("Ignoring unknown JSON message:\n%s\n", text);
-    }
+      g_signal_emit_by_name (webrtc1, "add-ice-candidate", sdpmlineindex, candidate);
+    } else  g_printerr ("Ignoring unknown JSON message:\n%s\n", text);
+    
     g_object_unref (parser);
   }
 
-out:
   g_free (text);
 }
 
@@ -503,17 +429,16 @@ static void on_server_connected (SoupSession * session, GAsyncResult * res, Soup
 
   g_assert_nonnull (ws_conn);
 
-  app_state = SERVER_CONNECTED;
+  app_state = SERVER_CONNECTED;//before was SERVER_CONNECTING ~~~~~~~~~~~~
   g_print ("Connected to signalling server\n");
 
-  g_signal_connect (ws_conn, "closed", G_CALLBACK (on_server_closed), NULL);
   g_signal_connect (ws_conn, "message", G_CALLBACK (on_server_message), NULL);
+  g_signal_connect (ws_conn, "closed", G_CALLBACK (on_server_closed), NULL);
+  
 
   /* Register with the server so it knows about us and can accept commands */
   register_with_server ();
 }
-
-
 // Connect to the signalling server. This is the entrypoint for everything else.
 static void connect_to_websocket_server_async (void){
 
@@ -536,10 +461,11 @@ static void connect_to_websocket_server_async (void){
   g_print ("Connecting to server...\n");
 
   /* Once connected, we will register */
-  soup_session_websocket_connect_async (session, message, NULL, NULL, NULL,
-      (GAsyncReadyCallback) on_server_connected, message);
-  app_state = SERVER_CONNECTING;
+  soup_session_websocket_connect_async (session, message, NULL, NULL, NULL, (GAsyncReadyCallback) on_server_connected, message);
+  app_state = SERVER_CONNECTING;//before was APP_STATE_UNKNOWN ~~~~~~~~~~~~
 }
+
+
 
 static gboolean check_plugins (void){
 
@@ -571,21 +497,24 @@ int main (int argc, char *argv[]){
   GError *error = NULL;
 
   context = g_option_context_new ("- gstreamer webrtc sendrecv demo");
+
   g_option_context_add_main_entries (context, entries, NULL);
   g_option_context_add_group (context, gst_init_get_option_group ());
   if (!g_option_context_parse (context, &argc, &argv, &error)) {
+
     g_printerr ("Error initializing: %s\n", error->message);
     return -1;
   }
 
-  if (!check_plugins ())
-    return -1;
+  if (!check_plugins ()) return -1;
 
   if (!peer_id) {
     g_printerr ("--peer-id is a required argument\n");
     return -1;
   }
 
+
+  
   loop = g_main_loop_new (NULL, FALSE);
 
   connect_to_websocket_server_async ();
@@ -594,8 +523,9 @@ int main (int argc, char *argv[]){
 
   gst_element_set_state (GST_ELEMENT (pipe1), GST_STATE_NULL);
   g_print ("Pipeline stopped\n");
-
+  
   gst_object_unref (pipe1);
+  
 
   return 0;
 }

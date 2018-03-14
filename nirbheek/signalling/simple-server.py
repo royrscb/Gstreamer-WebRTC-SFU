@@ -210,17 +210,12 @@ async def connection_handler(ws, uid):
 
 async def hello_peer(ws):
     '''
-    Exchange hello, register peer
+    Exchange hello, register peer PROTOCOL: HELLO UID
     '''
     raddr = ws.remote_address
     hello = await ws.recv()
     hello, uid = hello.split(maxsplit=1)
-    if hello != 'HELLO':
-        await ws.close(code=1002, reason='invalid protocol')
-        raise Exception("Invalid hello from {!r}".format(raddr))
-    if not uid or uid in peers or uid.split() != [uid]: # no whitespace
-        await ws.close(code=1002, reason='invalid peer uid')
-        raise Exception("Invalid uid {!r} from {!r}".format(uid, raddr))
+    
     # Send back a HELLO
     await ws.send('HELLO')
     return uid

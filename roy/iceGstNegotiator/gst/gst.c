@@ -36,7 +36,7 @@ static gchar* get_string_from_json_object (JsonObject * object){
   /* Release everything */
   g_object_unref (generator);
   json_node_free (root);
-  
+
   return text;
 }
 
@@ -65,7 +65,7 @@ static void on_closed (SoupWebsocketConnection *ws, gpointer user_data){
 
 
 
-static void finish_webSocket_sign_connection(GObject *object, GAsyncResult *result, gpointer user_data){
+static void on_sign_server_connected(GObject *object, GAsyncResult *result, gpointer user_data){
 
   SoupWebsocketConnection *ws_conn;
   GError *error = NULL;
@@ -90,14 +90,13 @@ static gboolean connect_webSocket_signServer(){
  
   msg = soup_message_new(SOUP_METHOD_GET, url_sign_server);
 
-  soup_session_websocket_connect_async(session, msg, NULL, (char **)NULL, NULL, finish_webSocket_sign_connection, NULL);
+  soup_session_websocket_connect_async(session, msg, NULL, (char **)NULL, NULL, on_sign_server_connected, NULL);
 
 
 	return TRUE;
 }
 
 int main(void){
-
 
 
 
