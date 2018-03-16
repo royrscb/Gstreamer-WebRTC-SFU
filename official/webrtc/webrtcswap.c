@@ -61,20 +61,40 @@ _bus_watch (GstBus * bus, GstMessage * msg, GstElement * pipe)
 static void
 _webrtc_pad_added (GstElement * webrtc, GstPad * new_pad, GstElement * pipe)
 {
-  GstElement *out;
-  GstPad *sink;
+  GstElement *out = NULL;
+  GstPad *sink = NULL;
+  GstCaps *caps;
+  GstStructure *s;
+  const gchar *encoding_name;
 
   if (GST_PAD_DIRECTION (new_pad) != GST_PAD_SRC)
     return;
 
-  out = gst_parse_bin_from_description ("rtpvp8depay ! vp8dec ! "
-      "videoconvert ! queue ! xvimagesink", TRUE, NULL);
+  caps = gst_pad_get_current_caps (new_pad);
+  if (!caps)
+    caps = gst_pad_query_caps (new_pad, NULL);
+  GST_ERROR_OBJECT (new_pad, "caps %" GST_PTR_FORMAT, caps);
+  g_assert (gst_caps_is_fixed (caps));
+  s = gst_caps_get_structure (caps, 0);
+  encoding_name = gst_structure_get_string (s, "encoding-name");
+  if (g_strcmp0 (encoding_name, "VP8") == 0) {
+    out = gst_parse_bin_from_description ("rtpvp8depay ! vp8dec ! "
+        "videoconvert ! queue ! xvimagesink sync=false", TRUE, NULL);
+  } else if (g_strcmp0 (encoding_name, "OPUS") == 0) {
+    out = gst_parse_bin_from_description ("rtpopusdepay ! opusdec ! "
+        "audioconvert ! audioresample ! audiorate ! queue ! autoaudiosink",
+        TRUE, NULL);
+  } else {
+    g_critical ("Unknown encoding name %s", encoding_name);
+    g_assert_not_reached ();
+  }
   gst_bin_add (GST_BIN (pipe), out);
   gst_element_sync_state_with_parent (out);
-
   sink = out->sinkpads->data;
 
   gst_pad_link (new_pad, sink);
+
+  gst_caps_unref (caps);
 }
 
 static void
@@ -93,15 +113,8 @@ _on_answer_received (GstPromise * promise, gpointer user_data)
   g_print ("Created answer:\n%s\n", desc);
   g_free (desc);
 
-  /* this is one way to tell webrtcbin that we don't want to be notified when
-   * this task is complete: set a NULL promise */
   g_signal_emit_by_name (webrtc1, "set-remote-description", answer, NULL);
-  /* this is another way to tell webrtcbin that we don't want to be notified
-   * when this task is complete: interrupt the promise */
-  promise = gst_promise_new ();
   g_signal_emit_by_name (webrtc2, "set-local-description", answer, NULL);
-  gst_promise_interrupt (promise);
-  gst_promise_unref (promise);
 
   gst_webrtc_session_description_free (answer);
 }
@@ -156,10 +169,15 @@ main (int argc, char *argv[])
 
   loop = g_main_loop_new (NULL, FALSE);
   pipe1 =
-      gst_parse_launch ("videotestsrc ! queue ! vp8enc ! rtpvp8pay ! queue ! "
-      "application/x-rtp,media=video,payload=96,encoding-name=VP8 ! "
-      "webrtcbin name=smpte videotestsrc pattern=ball ! queue ! vp8enc ! rtpvp8pay ! queue ! "
-      "application/x-rtp,media=video,payload=96,encoding-name=VP8 ! webrtcbin name=ball",
+      gst_parse_launch ("webrtcbin name=smpte webrtcbin name=ball "
+      "videotestsrc pattern=smpte ! queue ! vp8enc ! rtpvp8pay ! queue ! "
+      "application/x-rtp,media=video,payload=96,encoding-name=VP8 ! smpte.sink_0 "
+      "audiotestsrc ! opusenc ! rtpopuspay ! queue ! "
+      "application/x-rtp,media=audio,payload=97,encoding-name=OPUS ! smpte.sink_1 "
+      "videotestsrc pattern=ball ! queue ! vp8enc ! rtpvp8pay ! queue ! "
+      "application/x-rtp,media=video,payload=96,encoding-name=VP8 ! ball.sink_1 "
+      "audiotestsrc wave=saw ! opusenc ! rtpopuspay ! queue ! "
+      "application/x-rtp,media=audio,payload=97,encoding-name=OPUS ! ball.sink_0 ",
       NULL);
   bus1 = gst_pipeline_get_bus (GST_PIPELINE (pipe1));
   gst_bus_add_watch (bus1, (GstBusFunc) _bus_watch, pipe1);

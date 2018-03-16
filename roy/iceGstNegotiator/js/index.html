@@ -10,10 +10,15 @@
         serverConnection = new WebSocket('ws://127.0.0.1:3434');
         serverConnection.onmessage = gotMessageFromServer;
 
-        function gotMessageFromServer(message) {
+        function gotMessageFromServer(msg) {
 
-            console.log(message.data);
-        
+            console.log(JSON.parse(msg.data).data);
+        }
+
+
+        function sendSomethingTo(id, txt){
+
+        	serverConnection.send(JSON.stringify({type:"txt", data:txt, from:"?", to:id}));
         }
         
     </script>
