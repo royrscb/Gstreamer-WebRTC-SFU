@@ -75,7 +75,10 @@ static void on_sign_server_connected(GObject *object, GAsyncResult *result, gpoi
   g_signal_connect(ws_conn, "closed",  G_CALLBACK(on_closed),  NULL);
   g_signal_connect(ws_conn, "message", G_CALLBACK(on_message), NULL);
 
-  soup_websocket_connection_send_text(ws_conn, "WebSocket rocks");
+
+  //register with the signalling server as im the gst server
+  const char *msg = "{\"type\":\"gstServerON\", \"from\":0, \"to\":-1, \"data\":\"Im the true gst server!\"}";
+  soup_websocket_connection_send_text(ws_conn, msg);
 }
 
 static gboolean connect_webSocket_signServer(){
@@ -100,7 +103,7 @@ int main(void){
 
 
 
-  /*loop = g_main_loop_new (NULL, FALSE);
+  loop = g_main_loop_new (NULL, FALSE);
 
 
   connect_webSocket_signServer();
@@ -108,7 +111,7 @@ int main(void){
   g_main_loop_run (loop);
 
 
-  g_main_loop_unref(loop);*/
+  g_main_loop_unref(loop);
 
   return 0;
 }
