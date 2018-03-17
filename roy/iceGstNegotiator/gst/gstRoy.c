@@ -19,9 +19,8 @@ GMainLoop *loop = NULL;
 
 
 
-
-
-static gchar* get_string_from_json_object (JsonObject * object){
+/////JSON functions/////////////////////////////////////////////////////////////////////////////////
+static gchar* json_stringify (JsonObject * object){
 
   JsonNode *root;
   JsonGenerator *generator;
@@ -40,24 +39,87 @@ static gchar* get_string_from_json_object (JsonObject * object){
   return text;
 }
 
+static JsonObject* json_parse(gchar *msg){
 
-///////Websocket to signalling server connection///////////////////////////////////////////////////////////
+  JsonNode *root;
+  JsonObject *object;
+  JsonParser *parser = json_parser_new ();
 
-static void on_message(SoupWebsocketConnection *ws, SoupWebsocketDataType type, GBytes *message, gpointer user_data){
+  if (!json_parser_load_from_data (parser, msg, -1, NULL))   { g_printerr ("Unknown message '%s', ignoring", msg); g_object_unref (parser);}
+  root = json_parser_get_root (parser);
+  if (!JSON_NODE_HOLDS_OBJECT (root))                         { g_printerr ("Unknown json message '%s', ignoring", msg); g_object_unref (parser);}
+  object = json_node_get_object (root);
 
-  const char *contents;
-  gsize len;
 
-  if (type == SOUP_WEBSOCKET_DATA_TEXT) {
-
-    contents = g_bytes_get_data (message, &len);
-    g_print("%s\n", contents);
-  }
-
-  g_bytes_unref(message);
+  return object;
 }
 
-static void on_closed (SoupWebsocketConnection *ws, gpointer user_data){
+
+///////Signalling server connection///////////////////////////////////////////////////////////
+
+static void on_sign_message(SoupWebsocketConnection *ws_conn, SoupWebsocketDataType dataType, GBytes *message, gpointer user_data){
+
+  //--------------get msg-------------
+  gsize size;
+  gchar *msg, *mssg;
+
+  mssg = g_bytes_unref_to_data (message, &size);
+  /* Convert to NULL-terminated string */
+  msg = g_strndup (mssg, size);
+  g_free (mssg);
+
+  JsonObject *data = json_parse(msg);
+
+  //---------handle data-------------------
+
+  const gchar *type = json_object_get_string_member(data,"type");
+  const gint from = json_object_get_int_member(data,"from");
+  const gint to = json_object_get_int_member(data,"to");
+
+  g_print("--------------------------------------------------------\n");
+  
+
+  if(g_strcmp0(type,"txt")==0) g_print("<<<Type:%s from:%i to:%i data: %s\n",type,from,to,json_object_get_string_member(data,"data"));
+  else if(g_strcmp0(type, "offer")==0){
+
+    JsonObject *offer = json_object_get_object_member(data, "data");
+    const gchar *sdpText = json_object_get_string_member(offer, "sdp");
+
+
+
+
+    g_print("OFFER received from:%i offer: %s\n",from, json_stringify(offer));
+
+  }else if(g_strcmp0(type, "answer")==0){
+
+    JsonObject *answer = json_object_get_object_member(data, "data");
+    const gchar *sdpText = json_object_get_string_member(answer, "sdp");
+
+
+    
+
+    g_print("ANSWER received from:%i answer: %s\n",from, json_stringify(answer));
+
+
+  }else if(g_strcmp0(type, "candidate")==0){
+
+    JsonObject *ice = json_object_get_object_member(data, "data");
+    const gchar *candidate = json_object_get_string_member(ice, "candidate");
+    const gchar *sdpMid = json_object_get_string_member(ice, "sdpMid");
+    gint sdpMLineIndex = json_object_get_int_member(ice, "sdpMLineIndex");
+
+    g_print("Candidate received from:%i candidate: %s\n",from, json_stringify(ice));
+
+    //Add ice candidate sent by remote peer
+    //g_signal_emit_by_name (webrtc1, "add-ice-candidate", sdpmlineindex, candidate);
+
+  }else g_print("<<<Type:%s msg: %s\n",type,msg);
+
+
+  g_free(msg);
+}
+
+static void on_sign_closed (SoupWebsocketConnection *ws_conn, gpointer user_data){
 
   g_print("websocket closed\n");
   g_main_loop_quit(loop);
@@ -67,25 +129,22 @@ static void on_closed (SoupWebsocketConnection *ws, gpointer user_data){
 static void on_sign_server_connected(GObject *object, GAsyncResult *result, gpointer user_data){
 
   SoupWebsocketConnection *ws_conn;
-  GError *error = NULL;
 
-  ws_conn = soup_session_websocket_connect_finish(SOUP_SESSION(object), result, &error);
+  ws_conn = soup_session_websocket_connect_finish(SOUP_SESSION(object), result, NULL);
 
-
-  g_signal_connect(ws_conn, "closed",  G_CALLBACK(on_closed),  NULL);
-  g_signal_connect(ws_conn, "message", G_CALLBACK(on_message), NULL);
-
+  g_signal_connect(ws_conn, "message", G_CALLBACK(on_sign_message), NULL);
+  g_signal_connect(ws_conn, "closed",  G_CALLBACK(on_sign_closed),  NULL);
+  
 
   //register with the signalling server as im the gst server
-  const char *msg = "{\"type\":\"gstServerON\", \"from\":0, \"to\":-1, \"data\":\"Im the true gst server!\"}";
+  const char *msg = "{\"type\":\"gstServerON\", \"from\":0, \"to\":-1, \"data\":\"Im the real gst server!\"}";
   soup_websocket_connection_send_text(ws_conn, msg);
 }
 
-static gboolean connect_webSocket_signServer(){
+static void connect_webSocket_signServer(){
 
   SoupSession *session;
   SoupMessage *msg;
-  GError *error = NULL;
 
   session = soup_session_new();
   g_object_set(G_OBJECT(session), SOUP_SESSION_SSL_STRICT, FALSE, NULL);
@@ -93,13 +152,9 @@ static gboolean connect_webSocket_signServer(){
   msg = soup_message_new(SOUP_METHOD_GET, url_sign_server);
 
   soup_session_websocket_connect_async(session, msg, NULL, (char **)NULL, NULL, on_sign_server_connected, NULL);
-
-
-	return TRUE;
 }
 
-int main(void){
-
+int main(int argc, char *argv[]){
 
 
 

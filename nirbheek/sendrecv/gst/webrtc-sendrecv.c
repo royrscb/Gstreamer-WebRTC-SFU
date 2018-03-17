@@ -347,8 +347,7 @@ static void on_server_message (SoupWebsocketConnection * conn, SoupWebsocketData
     /* Start negotiation (exchange SDP and ICE candidates) */
     if (!start_pipeline ()) cleanup_and_quit_loop ("ERROR: failed to start pipeline", PEER_CALL_ERROR);
   /* Handle errors */
-  }else if (g_str_has_prefix (text, "ERROR")) g_print("Error sent from server\n");
-  else {g_print("%s", text);
+  }else {
     /* Look for JSON messages containing SDP and ICE candidates *///ICEICEICEICEICEICEICEICEICEICEICEIEICEIEICEICEIECIEICEICEICE
     JsonNode *root;
     JsonObject *object;
@@ -398,6 +397,7 @@ static void on_server_message (SoupWebsocketConnection * conn, SoupWebsocketData
 
       app_state = PEER_CALL_STARTED;
     } else if (json_object_has_member (object, "ice")) {
+      
       JsonObject *ice;
       const gchar *candidate;
       gint sdpmlineindex;

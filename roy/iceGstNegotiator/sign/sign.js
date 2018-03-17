@@ -61,7 +61,7 @@ wss.on('connection', function(socket, req) {
   console.log  ("^^^New conected "+id+" = "+ip); 
   wss.broadcast("^^^New conected "+id+" = "+ip, id); 
 
-  socket.send(JSON.stringify({type:"text", data:"Your id is "+id, from: SIGNALLING_SERVER_ID, to:id}));
+  socket.send(JSON.stringify({type:"txt", data:"Your id is "+id, from: SIGNALLING_SERVER_ID, to:id}));
   
 
 
@@ -87,12 +87,15 @@ wss.on('connection', function(socket, req) {
       delete sockets[id];
       id = GST_SERVER_ID;
 
+      sockets[GST_SERVER_ID] = {socket:socket, ip:ip, id:GST_SERVER_ID};
+
       console.log  ("Gst server active!");
       wss.broadcast("Gst server active!"); 
 
-      sockets[GST_SERVER_ID] = {socket:socket, ip:ip, id:GST_SERVER_ID};
+      
 
     }else if(data.to==BROADCAST) wss.broadcast(")))"+data.data,id,id);
+    else console.log("Destination ERROR");
     console.log("________________________________________________________________");
   });
 
@@ -115,7 +118,7 @@ wss.broadcast = function(msg, exception = null, from=SIGNALLING_SERVER_ID) {
   Object.keys(sockets).forEach(function(id){ 
       
       //to -2 means broadcast
-      if(id!=exception) sockets[id].socket.send(JSON.stringify({type:"text", data:msg, from: from, to:BROADCAST}));
+      if(id!=exception) sockets[id].socket.send(JSON.stringify({type:"txt", data:msg, from: from, to:BROADCAST}));
 
   });
   console.log(")))Broadcast: "+msg);

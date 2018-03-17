@@ -113,7 +113,7 @@ function websocketServerConnect() {
     } else {
         throw new Error ("Don't know how to connect to the signalling server with uri" + window.location);
     }
-    ws_conn = new WebSocket('wss://' + loc + ':8443');
+    ws_conn = new WebSocket('wss://' + loc + ':3434');
     /* When connected, immediately register with the server */
     ws_conn.addEventListener('open', (event) => {
         document.getElementById("peer-id").textContent = peer_id;
