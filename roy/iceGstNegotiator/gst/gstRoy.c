@@ -67,7 +67,7 @@ static void on_sign_message(SoupWebsocketConnection *ws_conn, SoupWebsocketDataT
   /* Convert to NULL-terminated string */
   msg = g_strndup (mssg, size);
   g_free (mssg);
-
+  
   JsonObject *data = json_parse(msg);
 
   //---------handle data-------------------
@@ -76,11 +76,28 @@ static void on_sign_message(SoupWebsocketConnection *ws_conn, SoupWebsocketDataT
   const gint from = json_object_get_int_member(data,"from");
   const gint to = json_object_get_int_member(data,"to");
 
-  g_print("--------------------------------------------------------\n");
-  
 
-  if(g_strcmp0(type,"txt")==0) g_print("<<<Type:%s from:%i to:%i data: %s\n",type,from,to,json_object_get_string_member(data,"data"));
-  else if(g_strcmp0(type, "offer")==0){
+  g_print("--------------------------------------------------------\n");
+  g_print("<<< Type:%s from:%i to:%i\n",type,from,to);
+
+  if(g_strcmp0(type,"txt")==0) g_print("%s\n", json_object_get_string_member(data,"data"));
+  else if(g_strcmp0(type, "socketON")==0){
+
+    JsonObject *data_data = json_object_get_object_member(data, "data");
+    const gint id = json_object_get_int_member(data_data, "id");
+    const gchar *ip = json_object_get_string_member(data_data, "ip");
+
+    g_print("^^^ New conected %i = %s\n",id,ip);
+
+  }else if(g_strcmp0(type, "socketOFF")==0){
+
+    JsonObject *data_data = json_object_get_object_member(data, "data");
+    const gint id = json_object_get_int_member(data_data, "id");
+    const gchar *ip = json_object_get_string_member(data_data, "ip");
+
+    g_print("vvv Disconected %i = %s\n",id,ip);
+
+  }else if(g_strcmp0(type, "offer")==0){
 
     JsonObject *offer = json_object_get_object_member(data, "data");
     const gchar *sdpText = json_object_get_string_member(offer, "sdp");
@@ -88,7 +105,7 @@ static void on_sign_message(SoupWebsocketConnection *ws_conn, SoupWebsocketDataT
 
 
 
-    g_print("OFFER received from:%i offer: %s\n",from, json_stringify(offer));
+    g_print("OFFER received: %s\n", json_stringify(offer));
 
   }else if(g_strcmp0(type, "answer")==0){
 
@@ -98,8 +115,7 @@ static void on_sign_message(SoupWebsocketConnection *ws_conn, SoupWebsocketDataT
 
     
 
-    g_print("ANSWER received from:%i answer: %s\n",from, json_stringify(answer));
-
+    g_print("ANSWER received: %s\n",json_stringify(answer));
 
   }else if(g_strcmp0(type, "candidate")==0){
 
@@ -108,12 +124,12 @@ static void on_sign_message(SoupWebsocketConnection *ws_conn, SoupWebsocketDataT
     const gchar *sdpMid = json_object_get_string_member(ice, "sdpMid");
     gint sdpMLineIndex = json_object_get_int_member(ice, "sdpMLineIndex");
 
-    g_print("Candidate received from:%i candidate: %s\n",from, json_stringify(ice));
+    g_print("Candidate received: %s\n", json_stringify(ice));
 
     //Add ice candidate sent by remote peer
     //g_signal_emit_by_name (webrtc1, "add-ice-candidate", sdpmlineindex, candidate);
 
-  }else g_print("<<<Type:%s msg: %s\n",type,msg);
+  }else g_print("Unknown type! %s\n",msg);
 
 
   g_free(msg);
@@ -133,12 +149,9 @@ static void on_sign_server_connected(GObject *object, GAsyncResult *result, gpoi
   ws_conn = soup_session_websocket_connect_finish(SOUP_SESSION(object), result, NULL);
 
   g_signal_connect(ws_conn, "message", G_CALLBACK(on_sign_message), NULL);
-  g_signal_connect(ws_conn, "closed",  G_CALLBACK(on_sign_closed),  NULL);
-  
+  g_signal_connect(ws_conn, "closed",  G_CALLBACK(on_sign_closed),  NULL); 
 
-  //register with the signalling server as im the gst server
-  const char *msg = "{\"type\":\"gstServerON\", \"from\":0, \"to\":-1, \"data\":\"Im the real gst server!\"}";
-  soup_websocket_connection_send_text(ws_conn, msg);
+  g_print("Connected to the sign server succesfully\n");
 }
 
 static void connect_webSocket_signServer(){
@@ -151,11 +164,11 @@ static void connect_webSocket_signServer(){
  
   msg = soup_message_new(SOUP_METHOD_GET, url_sign_server);
 
-  soup_session_websocket_connect_async(session, msg, NULL, (char **)NULL, NULL, on_sign_server_connected, NULL);
+  soup_session_websocket_connect_async(session, msg, "gstServer", (char **)NULL, NULL, on_sign_server_connected, NULL);
 }
 
 int main(int argc, char *argv[]){
-
+  g_print("Gst Server Active\n");
 
 
   loop = g_main_loop_new (NULL, FALSE);
