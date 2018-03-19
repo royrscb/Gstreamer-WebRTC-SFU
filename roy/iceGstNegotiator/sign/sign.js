@@ -83,21 +83,15 @@ wss.on('connection', function(socket, req) {
     try{ data = JSON.parse(msg); }
     catch(ex){ data = {type:"JSON_ERROR", data:msg, from:undefined, to:undefined} }
 
-    console.log("________________________________________________________________");
-    console.log("<<< Type:"+data.type+" from:"+data.from+" to:"+data.to+" data: "+data.data);
+
     console.log("----------------------------------------------------------------");
+    console.log("Message type:"+data.type+" from:"+data.from+" to:"+data.to+":"); console.log(data.data);
 
-    if(data.to>=0 && sockets[data.to]!=undefined){
-
-      console.log(">>> Type:"+data.type+" from:"+data.from+" to:"+data.to+" data: "+data.data);
-
-      sockets[data.to].socket.send(msg);
-
-    }else if(data.to==SIGNALLING_SERVER_ID) console.log(data.data);
+    if(data.to>=0 && sockets[data.to]!=undefined) sockets[data.to].socket.send(msg);
+    else if(data.to==SIGNALLING_SERVER_ID) console.log(data.data);
     else if(data.to==BROADCAST) wss.broadcast("))) "+data.data,"txt",id,id);
     else console.log("Destination ERROR");
     
-    console.log("________________________________________________________________");
   });
 
 
@@ -124,5 +118,5 @@ wss.broadcast = function(msg, type = "txt", exception = null, from=SIGNALLING_SE
       if(id!=exception) sockets[id].socket.send(JSON.stringify({type:type, data:msg, from: from, to:BROADCAST}));
 
   });
-  console.log("))) Broadcast: "+msg);
+  process.stdout.write("))) Broadcast: "); console.log(msg); console.log("");
 };
