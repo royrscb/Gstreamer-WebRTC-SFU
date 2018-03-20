@@ -122,21 +122,17 @@ static void on_incoming_decodebin_stream (GstElement * decodebin, GstPad * pad, 
   const gchar *name;
 
   if (!gst_pad_has_current_caps (pad)) {
-    g_printerr ("Pad '%s' has no caps, can't do anything, ignoring\n",
-        GST_PAD_NAME (pad));
+    g_printerr ("Pad '%s' has no caps, can't do anything, ignoring\n", GST_PAD_NAME (pad));
     return;
   }
 
   caps = gst_pad_get_current_caps (pad);
   name = gst_structure_get_name (gst_caps_get_structure (caps, 0));
 
-  if (g_str_has_prefix (name, "video")) {
-    handle_media_stream (pad, pipe, "videoconvert", "autovideosink");
-  } else if (g_str_has_prefix (name, "audio")) {
-    handle_media_stream (pad, pipe, "audioconvert", "autoaudiosink");
-  } else {
-    g_printerr ("Unknown pad %s, ignoring", GST_PAD_NAME (pad));
-  }
+  if (g_str_has_prefix (name, "video"))  handle_media_stream (pad, pipe, "videoconvert", "autovideosink");
+  else if (g_str_has_prefix (name, "audio")) handle_media_stream (pad, pipe, "audioconvert", "autoaudiosink");
+  else g_printerr ("Unknown pad %s, ignoring", GST_PAD_NAME (pad));
+  
 }
 
 static void on_incoming_stream (GstElement * webrtc, GstPad * pad, GstElement * pipe){

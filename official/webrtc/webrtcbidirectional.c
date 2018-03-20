@@ -122,8 +122,7 @@ static void _on_offer_received (GstPromise * promise, gpointer user_data){
   g_signal_emit_by_name (webrtc1, "set-local-description", offer, NULL);
   g_signal_emit_by_name (webrtc2, "set-remote-description", offer, NULL);
 
-  promise = gst_promise_new_with_change_func (_on_answer_received, user_data,
-      NULL);
+  promise = gst_promise_new_with_change_func (_on_answer_received, user_data, NULL);
   g_signal_emit_by_name (webrtc2, "create-answer", NULL, promise);
 
   gst_webrtc_session_description_free (offer);
@@ -133,8 +132,7 @@ static void _on_negotiation_needed (GstElement * element, gpointer user_data){
 
   GstPromise *promise;
 
-  promise = gst_promise_new_with_change_func (_on_offer_received, user_data,
-      NULL);
+  promise = gst_promise_new_with_change_func(_on_offer_received, user_data, NULL);
   g_signal_emit_by_name (webrtc1, "create-offer", NULL, promise);
 }
 

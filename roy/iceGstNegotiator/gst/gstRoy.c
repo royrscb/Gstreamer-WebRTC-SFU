@@ -21,7 +21,9 @@ static GstElement *pipe1, *webrtc1;
 static GMainLoop *loop = NULL;
 static SoupWebsocketConnection *ws_conn = NULL;
 
+static gint remoteIDtmp = 1;
 
+static void start_pipeline();//proviiiiiiiiiiiiiiiii
 
 
 
@@ -61,22 +63,165 @@ static JsonObject* json_parse(gchar *msg){
   return object;
 }
 
-///////////// Negotiation /////////////////////////////////////////////////////////
-void send_to(gchar *type, gchar *text, gint to){
+
+////////// De propina ////////////////////////////////////////////////////////////////////
+static void handle_media_stream (GstPad * pad, GstElement * pipe, const char * convert_name, const char * sink_name){
+
+  GstPad *qpad;
+  GstElement *q, *conv, *sink;
+  GstPadLinkReturn ret;
+
+  g_print ("Trying to handle stream with %s ! %s", convert_name, sink_name);
+
+  q = gst_element_factory_make ("queue", NULL);
+  g_assert_nonnull (q);
+  conv = gst_element_factory_make (convert_name, NULL);
+  g_assert_nonnull (conv);
+  sink = gst_element_factory_make (sink_name, NULL);
+  g_assert_nonnull (sink);
+  gst_bin_add_many (GST_BIN (pipe), q, conv, sink, NULL);
+  gst_element_sync_state_with_parent (q);
+  gst_element_sync_state_with_parent (conv);
+  gst_element_sync_state_with_parent (sink);
+  gst_element_link_many (q, conv, sink, NULL);
+
+  qpad = gst_element_get_static_pad (q, "sink");
+
+  ret = gst_pad_link (pad, qpad);
+  g_assert_cmphex (ret, ==, GST_PAD_LINK_OK);
+}
+
+static void on_incoming_decodebin_stream (GstElement * decodebin, GstPad * pad, GstElement * pipe){
+
+  GstCaps *caps;
+  const gchar *name;
+
+  if (!gst_pad_has_current_caps (pad)) {
+    g_printerr ("Pad '%s' has no caps, can't do anything, ignoring\n", GST_PAD_NAME (pad));
+    return;
+  }
+
+  caps = gst_pad_get_current_caps (pad);
+  name = gst_structure_get_name (gst_caps_get_structure (caps, 0));
+
+  if (g_str_has_prefix (name, "video"))  handle_media_stream (pad, pipe, "videoconvert", "autovideosink");
+  else if (g_str_has_prefix (name, "audio")) handle_media_stream (pad, pipe, "audioconvert", "autoaudiosink");
+  else g_printerr ("Unknown pad %s, ignoring", GST_PAD_NAME (pad));
+  
+}
+
+static void on_incoming_stream (GstElement * webrtc, GstPad * pad, GstElement * pipe){
+
+  GstElement *decodebin;
+
+  if (GST_PAD_DIRECTION (pad) != GST_PAD_SRC)
+    return;
+
+  decodebin = gst_element_factory_make ("decodebin", NULL);
+  g_signal_connect (decodebin, "pad-added", G_CALLBACK (on_incoming_decodebin_stream), pipe);
+  gst_bin_add (GST_BIN (pipe), decodebin);
+  gst_element_sync_state_with_parent (decodebin);
+  gst_element_link (webrtc, decodebin);
+}
+
+
+///////////// Negotiation ///////////////////////////////////////////////////////////////////////
+void send_data_to(gchar *type, JsonObject *dataData, gint to){
 
   JsonObject *data, *realdata;
 
   data = json_object_new ();
   json_object_set_string_member (data, "type", type);
-  json_object_set_string_member (data, "data", text);
+  json_object_set_object_member (data, "data", dataData);
   json_object_set_int_member (data, "from", 0);
   json_object_set_int_member (data, "to", to);
 
   soup_websocket_connection_send_text(ws_conn, json_stringify(data));
 
-  json_object_unref (data);
+  json_object_unref(data);
 }
 
+
+static void send_ice_candidate (GstElement * webrtc G_GNUC_UNUSED, guint mlineindex, gchar * candidate, gpointer user_data G_GNUC_UNUSED){
+
+  JsonObject *ice = json_object_new ();
+
+  json_object_set_string_member(ice, "candidate", candidate);
+  json_object_set_int_member (ice, "sdpMLineIndex", mlineindex);
+
+  send_data_to("candidate", ice, remoteIDtmp);
+
+  json_object_unref(ice);
+}
+
+
+/* Offer created by our pipeline, to be sent to the peer */
+static void on_offer_created (GstPromise * promise, gpointer user_data){
+
+  GstWebRTCSessionDescription *offer = NULL;
+  const GstStructure *reply;
+
+  gst_promise_wait (promise);
+
+  reply = gst_promise_get_reply (promise);
+  gst_structure_get(reply, "offer", GST_TYPE_WEBRTC_SESSION_DESCRIPTION, &offer, NULL);
+  gst_promise_unref(promise);
+
+
+  gchar *sdp = gst_sdp_message_as_text (offer->sdp);
+  g_print ("Setting local desc(offer) and sending created offer:\n%s\n", sdp);
+
+  g_signal_emit_by_name (webrtc1, "set-local-description", offer, NULL);
+
+
+  JsonObject *data = json_object_new();
+  json_object_set_string_member(data, "type", "offer");
+  json_object_set_string_member(data, "sdp", sdp);
+  g_free(sdp);
+
+  send_data_to("offer", data, remoteIDtmp);
+
+  json_object_unref(data);
+  gst_webrtc_session_description_free (offer);
+}
+
+static void on_answer_created (GstPromise * promise, gpointer user_data){
+
+  GstWebRTCSessionDescription *answer = NULL;
+  const GstStructure *reply;
+
+  gst_promise_wait (promise);
+
+  reply = gst_promise_get_reply (promise);
+  gst_structure_get(reply, "answer", GST_TYPE_WEBRTC_SESSION_DESCRIPTION, &answer, NULL);
+  gst_promise_unref(promise);
+
+
+  gchar *sdp = gst_sdp_message_as_text(answer->sdp);
+  g_print ("Setting local desc(answer) and sending created answer:\n%s\n", sdp);
+
+  g_signal_emit_by_name (webrtc1, "set-local-description", answer, NULL);
+
+
+  JsonObject *data = json_object_new();
+  json_object_set_string_member(data, "type", "answer");
+  json_object_set_string_member(data, "sdp", sdp);
+  g_free(sdp);
+
+  send_data_to("answer", data, remoteIDtmp);
+
+  json_object_unref(data);
+  gst_webrtc_session_description_free(answer);
+}
+
+
+static void on_negotiation_needed (GstElement * element, gpointer user_data){
+
+  GstPromise *promise;
+
+  promise = gst_promise_new_with_change_func (on_offer_created, user_data, NULL);
+  g_signal_emit_by_name (webrtc1, "create-offer", NULL, promise);
+}
 
 
 
@@ -112,6 +257,9 @@ static void on_sign_message(SoupWebsocketConnection *ws_conn, SoupWebsocketDataT
     const gint id = json_object_get_int_member(data_data, "id");
     const gchar *ip = json_object_get_string_member(data_data, "ip");
 
+    remoteIDtmp = id;
+    start_pipeline();
+
     g_print("^^^ New conected %i = %s\n",id,ip);
 
   }else if(g_strcmp0(type, "socketOFF")==0){
@@ -122,37 +270,56 @@ static void on_sign_message(SoupWebsocketConnection *ws_conn, SoupWebsocketDataT
 
     g_print("vvv Disconected %i = %s\n",id,ip);
 
-  }else if(g_strcmp0(type, "offer")==0){
+  }else if(g_strcmp0(type, "offer")==0){start_pipeline();
 
-    JsonObject *offer = json_object_get_object_member(data, "data");
-    const gchar *sdpText = json_object_get_string_member(offer, "sdp");
+    JsonObject *of = json_object_get_object_member(data, "data");
+    const gchar *sdpText = json_object_get_string_member(of, "sdp");
 
+    g_print("OFFER received: %s\n", json_stringify(of));
 
+    GstSDPMessage *sdp;
+    gst_sdp_message_new(&sdp);
+    gst_sdp_message_parse_buffer(sdpText, strlen(sdpText), sdp);
 
-
-    g_print("OFFER received: %s\n", json_stringify(offer));
-
-  }else if(g_strcmp0(type, "answer")==0){
-
-    JsonObject *answer = json_object_get_object_member(data, "data");
-    const gchar *sdpText = json_object_get_string_member(answer, "sdp");
-
+    GstWebRTCSessionDescription *offer;
+    offer = gst_webrtc_session_description_new(GST_WEBRTC_SDP_TYPE_OFFER, sdp);
+    g_signal_emit_by_name (webrtc1, "set-remote-description", offer, NULL);
 
     
 
-    g_print("ANSWER received: %s\n",json_stringify(answer));
+    //creating the answer
+    GstPromise *promise;
+  
+    promise = gst_promise_new_with_change_func(on_answer_created, user_data, NULL);
+    g_signal_emit_by_name (webrtc1, "create-answer", NULL, promise);
+    
+  }else if(g_strcmp0(type, "answer")==0){
+
+    JsonObject *ans = json_object_get_object_member(data, "data");
+    const gchar *sdpText = json_object_get_string_member(ans, "sdp");
+
+    g_print("ANSWER received: %s\n",json_stringify(ans));
+
+
+    GstSDPMessage *sdp;
+    gst_sdp_message_new(&sdp);
+    gst_sdp_message_parse_buffer(sdpText, strlen(sdpText), sdp);
+
+    GstWebRTCSessionDescription *answer;
+    answer = gst_webrtc_session_description_new(GST_WEBRTC_SDP_TYPE_ANSWER, sdp);
+    g_signal_emit_by_name (webrtc1, "set-remote-description", answer, NULL);
 
   }else if(g_strcmp0(type, "candidate")==0){
 
     JsonObject *ice = json_object_get_object_member(data, "data");
     const gchar *candidate = json_object_get_string_member(ice, "candidate");
-    const gchar *sdpMid = json_object_get_string_member(ice, "sdpMid");
+    //const gchar *sdpMid = json_object_get_string_member(ice, "sdpMid");
     gint sdpMLineIndex = json_object_get_int_member(ice, "sdpMLineIndex");
 
     g_print("Candidate received: %s\n", json_stringify(ice));
 
     //Add ice candidate sent by remote peer
-    //g_signal_emit_by_name (webrtc1, "add-ice-candidate", sdpmlineindex, candidate);
+    g_signal_emit_by_name (webrtc1, "add-ice-candidate", sdpMLineIndex, candidate);
 
   }else g_print("Unknown type! %s\n",msg);
 
@@ -179,13 +346,38 @@ static void on_sign_server_connected(GObject *object, GAsyncResult *result, gpoi
 }
 
 
+#define STUN_SERVER " stun-server=stun://stun.l.google.com:19302 "
+#define RTP_CAPS_OPUS "application/x-rtp,media=audio,encoding-name=OPUS,payload="
+#define RTP_CAPS_VP8 "application/x-rtp,media=video,encoding-name=VP8,payload="
+
 ///// Pipeline ////////////////////////
 static void start_pipeline(){
 
+  GError *error = NULL;
+
+  pipe1 =
+      gst_parse_launch ("webrtcbin name=sendrecv " STUN_SERVER
+      "videotestsrc pattern=ball ! queue ! vp8enc deadline=1 ! rtpvp8pay ! "
+      "queue ! " RTP_CAPS_VP8 "96 ! sendrecv. "
+      "audiotestsrc wave=red-noise ! queue ! opusenc ! rtpopuspay ! "
+      "queue ! " RTP_CAPS_OPUS "97 ! sendrecv. ",
+      &error);
+
+  if (error) { g_printerr ("Failed to parse launch: %s\n", error->message); g_error_free (error); if (pipe1) g_clear_object (&pipe1);}
+
+  webrtc1 = gst_bin_get_by_name (GST_BIN (pipe1), "sendrecv");
 
 
+  //This is the gstwebrtc entry point where we create the offer and so on. It will be called when the pipeline goes to PLAYING.
+  g_signal_connect(webrtc1, "on-negotiation-needed", G_CALLBACK (on_negotiation_needed), NULL);
+  g_signal_connect(webrtc1, "on-ice-candidate", G_CALLBACK (send_ice_candidate), NULL);
+  /* Incoming streams will be exposed via this signal */
+  g_signal_connect(webrtc1, "pad-added", G_CALLBACK (on_incoming_stream), pipe1);
+  /* Lifetime is the same as the pipeline itself */
+  gst_object_unref(webrtc1);
 
-
+  g_print ("Starting pipeline\n");
+  gst_element_set_state (GST_ELEMENT (pipe1), GST_STATE_PLAYING);
 
 }
 
@@ -203,6 +395,8 @@ static void connect_webSocket_signServer(){
 }
 
 int main(int argc, char *argv[]){
+
+  gst_init (&argc, &argv);
   g_print("Gst Server running\n");
 
   loop = g_main_loop_new (NULL, FALSE);
@@ -210,7 +404,7 @@ int main(int argc, char *argv[]){
 
   connect_webSocket_signServer();
 
-
+  //start_pipeline();
 
   g_main_loop_run (loop);
 

@@ -13,7 +13,7 @@ hangupButton.onclick = hangup;
 
 
 //////// Variables //////////////////////////////////////////////////
-var localStream,localStream2, peerConnection, wss, localID, remoteID=0, gstServerON = false;
+var localStream, peerConnection, wss, localID, remoteID=0, gstServerON = false;
 var web_socket_sign_url = 'ws://127.0.0.1:3434';
 
 var configuration = {
@@ -105,8 +105,8 @@ function connectSignServer(){
 
       callButton.disabled = false;
       
-      if(data.from==-1) wss.send(JSON.stringify({type:"socketON",data:{id:localID},to:data.data.id}));//ultraMegaMasterPROVI
-      remoteID = data.data.id;
+      //if(data.from==-1) wss.send(JSON.stringify({type:"socketON",data:{id:localID},to:data.data.id}));//ultraMegaMasterPROVI
+      //remoteID = data.data.id;
 
       console.log("^^^ New conected "+data.data.id+" = "+data.data.ip);
     }else if(data.type=="socketOFF"){
@@ -142,7 +142,6 @@ function connectSignServer(){
   }
 }
 
-
 function createPeerConnection(){
 
   console.log('Creating peer connection');
@@ -159,12 +158,7 @@ function createPeerConnection(){
     }
   }
 
-  peerConnection.onnegotiationneeded = function(ev){
-
-    console.log('%c Needed negotiation', 'background: #222; color: #bada55'); console.log(ev);
-
-    if(remoteID!=0) call();
-  }
+  //peerConnection.onnegotiationneeded = call;
 
   peerConnection.ontrack = function(ev){
 
