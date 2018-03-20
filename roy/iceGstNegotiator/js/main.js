@@ -7,13 +7,13 @@ var startButton = document.getElementById("startButton");
 var callButton = document.getElementById("callButton");
 var hangupButton = document.getElementById("hangupButton");
 
-// Associate JavaScript handlers with click events on the buttons
 startButton.onclick = start;
 callButton.onclick = call;
 hangupButton.onclick = hangup;
 
+
 //////// Variables //////////////////////////////////////////////////
-var localStream, peerConnection, wss, localID, remoteID=0, gstServerON = false;
+var localStream,localStream2, peerConnection, wss, localID, remoteID=0, gstServerON = false;
 var web_socket_sign_url = 'ws://127.0.0.1:3434';
 
 var configuration = {
@@ -27,30 +27,29 @@ var configuration = {
 //////////// Media ///////////////////////////////////////////////////////////////////////////////////////////////
 
 function start() {
-  console.log("Requesting local stream");
-  // First of all, disable the 'Start' button on the page
+  console.log("Connecting to the signalling server, creating peerConnection and requesting local stream");
   startButton.disabled = true;
   
+  connectSignServer();
+
+  createPeerConnection();
+
 
   var constraints = {video: true, audio: true};
 
   // Add local stream
-  navigator.mediaDevices.getUserMedia(constraints).then((stream) => { 
+  navigator.mediaDevices.getUserMedia(constraints).then(function(stream){ 
 
-    localStream = stream 
+    localStream = stream;
 
-    if (window.URL) localVideo.srcObject = stream;
-    else localVideo.src = stream;
+    stream.getTracks().forEach(track => peerConnection.addTrack(track, stream));
+
   });
-
-  connectServer();
 }
 
 function call(){
 
   callButton.disabled = true;
-
-  createPeerConnection();
 
   peerConnection.createOffer().then(function(description){
 
@@ -75,7 +74,8 @@ function hangup(){
 }
 
 
-function connectServer(){
+
+function connectSignServer(){
 
   // Connect to signalling server
   wss = new WebSocket(web_socket_sign_url);
@@ -94,7 +94,7 @@ function connectServer(){
       localID = data.data;
 
       console.log('%c My id is:'+localID, 'background: #222; color: #bada55');
-      
+
     }else if(data.type=="gstServerON"){
 
       gstServerON = true;
@@ -104,6 +104,9 @@ function connectServer(){
     }else if(data.type=="socketON"){
 
       callButton.disabled = false;
+      
+      if(data.from==-1) wss.send(JSON.stringify({type:"socketON",data:{id:localID},to:data.data.id}));//ultraMegaMasterPROVI
+      remoteID = data.data.id;
 
       console.log("^^^ New conected "+data.data.id+" = "+data.data.ip);
     }else if(data.type=="socketOFF"){
@@ -111,12 +114,16 @@ function connectServer(){
       console.log("vvv Disconnected "+data.data.id+" = "+data.data.ip);
     }else if(data.type=="offer"){
 
-      createPeerConnection();
-
       console.log('Offer received:'); console.log(data.data);
       peerConnection.setRemoteDescription(new RTCSessionDescription(data.data));
 
-      answer();
+      peerConnection.createAnswer().then(function(description){
+
+        peerConnection.setLocalDescription(description);
+
+        console.log('Sending answer:'); console.log(description);
+        wss.send(JSON.stringify({type:"answer", data:description, to:remoteID, from:localID}));
+      });
 
     }else if(data.type=="answer"){
 
@@ -135,12 +142,12 @@ function connectServer(){
   }
 }
 
+
 function createPeerConnection(){
 
   console.log('Creating peer connection');
-  peerConnection = new RTCPeerConnection(configuration);
+  peerConnection = new RTCPeerConnection();
 
-  peerConnection.addStream(localStream);
 
   peerConnection.onicecandidate = function(ev){
 
@@ -152,29 +159,19 @@ function createPeerConnection(){
     }
   }
 
-  peerConnection.onaddstream = function(ev){
+  peerConnection.onnegotiationneeded = function(ev){
 
-    videoTracks = ev.stream.getVideoTracks();
-    audioTracks = ev.stream.getAudioTracks();
+    console.log('%c Needed negotiation', 'background: #222; color: #bada55'); console.log(ev);
 
-    console.log('Incoming stream: ' + videoTracks.length + ' video tracks and ' + audioTracks.length + ' audio tracks');
-    remoteVideo.srcObject = ev.stream;
+    if(remoteID!=0) call();
+  }
+
+  peerConnection.ontrack = function(ev){
+
+    remoteVideo.srcObject = ev.streams[0];
     
 
     callButton.disabled = true;
     hangupButton.disabled = false;
   }
-}
-
-function answer(){
-
-  peerConnection.createAnswer().then(function(description){
-
-    console.log('Setting local description');
-    peerConnection.setLocalDescription(description);
-
-    console.log('Sending answer:'); console.log(description);
-    wss.send(JSON.stringify({type:"answer", data:description, to:remoteID, from:localID}));
-
-  });
 }

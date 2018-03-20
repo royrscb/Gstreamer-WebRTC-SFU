@@ -147,8 +147,7 @@ static void on_incoming_stream (GstElement * webrtc, GstPad * pad, GstElement * 
     return;
 
   decodebin = gst_element_factory_make ("decodebin", NULL);
-  g_signal_connect (decodebin, "pad-added",
-      G_CALLBACK (on_incoming_decodebin_stream), pipe);
+  g_signal_connect (decodebin, "pad-added", G_CALLBACK (on_incoming_decodebin_stream), pipe);
   gst_bin_add (GST_BIN (pipe), decodebin);
   gst_element_sync_state_with_parent (decodebin);
   gst_element_link (webrtc, decodebin);
@@ -214,14 +213,11 @@ static void on_offer_created (GstPromise * promise, gpointer user_data){
 
   g_assert_cmphex (gst_promise_wait(promise), ==, GST_PROMISE_RESULT_REPLIED);
   reply = gst_promise_get_reply (promise);
-  gst_structure_get (reply, "offer",
-      GST_TYPE_WEBRTC_SESSION_DESCRIPTION, &offer, NULL);
+  gst_structure_get (reply, "offer", GST_TYPE_WEBRTC_SESSION_DESCRIPTION, &offer, NULL);
   gst_promise_unref (promise);
 
-  promise = gst_promise_new ();
-  g_signal_emit_by_name (webrtc1, "set-local-description", offer, promise);
-  gst_promise_interrupt (promise);
-  gst_promise_unref (promise);
+  g_signal_emit_by_name (webrtc1, "set-local-description", offer, NULL);
+
 
   /* Send offer to peer */
   send_sdp_offer (offer);
@@ -241,8 +237,7 @@ static void on_negotiation_needed (GstElement * element, gpointer user_data){
 #define RTP_CAPS_OPUS "application/x-rtp,media=audio,encoding-name=OPUS,payload="
 #define RTP_CAPS_VP8 "application/x-rtp,media=video,encoding-name=VP8,payload="
 
-static gboolean
-start_pipeline (void){
+static gboolean start_pipeline (void){
 
   GstStateChangeReturn ret;
   GError *error = NULL;
@@ -266,23 +261,19 @@ start_pipeline (void){
 
   /* This is the gstwebrtc entry point where we create the offer and so on. It
    * will be called when the pipeline goes to PLAYING. */
-  g_signal_connect (webrtc1, "on-negotiation-needed",
-      G_CALLBACK (on_negotiation_needed), NULL);
+  g_signal_connect (webrtc1, "on-negotiation-needed", G_CALLBACK (on_negotiation_needed), NULL);
   /* We need to transmit this ICE candidate to the browser via the websockets
    * signalling server. Incoming ice candidates from the browser need to be
    * added by us too, see on_server_message() */
-  g_signal_connect (webrtc1, "on-ice-candidate",
-      G_CALLBACK (send_ice_candidate_message), NULL);
+  g_signal_connect (webrtc1, "on-ice-candidate", G_CALLBACK (send_ice_candidate_message), NULL);
   /* Incoming streams will be exposed via this signal */
-  g_signal_connect (webrtc1, "pad-added", G_CALLBACK (on_incoming_stream),
-      pipe1);
+  g_signal_connect (webrtc1, "pad-added", G_CALLBACK (on_incoming_stream), pipe1);
   /* Lifetime is the same as the pipeline itself */
   gst_object_unref (webrtc1);
 
   g_print ("Starting pipeline\n");
   ret = gst_element_set_state (GST_ELEMENT (pipe1), GST_STATE_PLAYING);
-  if (ret == GST_STATE_CHANGE_FAILURE)
-    goto err;
+  if (ret == GST_STATE_CHANGE_FAILURE) goto err;
 
   return TRUE;
 
@@ -293,6 +284,8 @@ err:
     webrtc1 = NULL;
   return FALSE;
 }
+
+//////////// SIGN SERVER STUFF /////////////////////////////////////////////////////////////////////////////
 
 static void register_with_server (void){
 

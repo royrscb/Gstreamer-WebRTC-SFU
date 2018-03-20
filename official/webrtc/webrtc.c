@@ -1,5 +1,7 @@
 #include <gst/gst.h>
 #include <gst/sdp/sdp.h>
+
+#define GST_USE_UNSTABLE_API
 #include <gst/webrtc/webrtc.h>
 
 #include <string.h>
@@ -8,9 +10,8 @@ static GMainLoop *loop;
 static GstElement *pipe1, *webrtc1, *webrtc2;
 static GstBus *bus1;
 
-static gboolean
-_bus_watch (GstBus * bus, GstMessage * msg, GstElement * pipe)
-{
+static gboolean _bus_watch (GstBus * bus, GstMessage * msg, GstElement * pipe){
+
   switch (GST_MESSAGE_TYPE (msg)) {
     case GST_MESSAGE_STATE_CHANGED:
       if (GST_ELEMENT (msg->src) == pipe) {
@@ -58,14 +59,12 @@ _bus_watch (GstBus * bus, GstMessage * msg, GstElement * pipe)
   return TRUE;
 }
 
-static void
-_webrtc_pad_added (GstElement * webrtc, GstPad * new_pad, GstElement * pipe)
-{
+static void _webrtc_pad_added (GstElement * webrtc, GstPad * new_pad, GstElement * pipe){
+
   GstElement *out;
   GstPad *sink;
 
-  if (GST_PAD_DIRECTION (new_pad) != GST_PAD_SRC)
-    return;
+  if (GST_PAD_DIRECTION (new_pad) != GST_PAD_SRC) return;
 
   out = gst_parse_bin_from_description ("rtpvp8depay ! vp8dec ! "
       "videoconvert ! queue ! xvimagesink sync=false", TRUE, NULL);
@@ -77,9 +76,8 @@ _webrtc_pad_added (GstElement * webrtc, GstPad * new_pad, GstElement * pipe)
   gst_pad_link (new_pad, sink);
 }
 
-static void
-_on_answer_received (GstPromise * promise, gpointer user_data)
-{
+static void _on_answer_received (GstPromise * promise, gpointer user_data){
+
   GstWebRTCSessionDescription *answer = NULL;
   const GstStructure *reply;
   gchar *desc;
@@ -99,9 +97,8 @@ _on_answer_received (GstPromise * promise, gpointer user_data)
   gst_webrtc_session_description_free (answer);
 }
 
-static void
-_on_offer_received (GstPromise * promise, gpointer user_data)
-{
+static void _on_offer_received (GstPromise * promise, gpointer user_data){
+ 
   GstWebRTCSessionDescription *offer = NULL;
   const GstStructure *reply;
   gchar *desc;
@@ -125,9 +122,8 @@ _on_offer_received (GstPromise * promise, gpointer user_data)
   gst_webrtc_session_description_free (offer);
 }
 
-static void
-_on_negotiation_needed (GstElement * element, gpointer user_data)
-{
+static void _on_negotiation_needed (GstElement * element, gpointer user_data){
+
   GstPromise *promise;
 
   promise = gst_promise_new_with_change_func (_on_offer_received, user_data,
@@ -135,42 +131,44 @@ _on_negotiation_needed (GstElement * element, gpointer user_data)
   g_signal_emit_by_name (webrtc1, "create-offer", NULL, promise);
 }
 
-static void
-_on_ice_candidate (GstElement * webrtc, guint mlineindex, gchar * candidate,
-    GstElement * other)
-{
+static void _on_ice_candidate (GstElement * webrtc, guint mlineindex, gchar * candidate, GstElement * other){
+
   g_signal_emit_by_name (other, "add-ice-candidate", mlineindex, candidate);
 }
 
-int
-main (int argc, char *argv[])
-{
+int main (int argc, char *argv[]){
+
   gst_init (&argc, &argv);
 
   loop = g_main_loop_new (NULL, FALSE);
   pipe1 =
-      gst_parse_launch
-      ("videotestsrc ! video/x-raw,framerate=1/1 ! queue ! vp8enc ! rtpvp8pay ! queue ! "
+      gst_parse_launch("videotestsrc ! video/x-raw,framerate=1/1 ! queue ! vp8enc ! rtpvp8pay ! queue ! "
       "application/x-rtp,media=video,payload=96,encoding-name=VP8 ! "
       "webrtcbin name=send webrtcbin name=recv", NULL);
   bus1 = gst_pipeline_get_bus (GST_PIPELINE (pipe1));
   gst_bus_add_watch (bus1, (GstBusFunc) _bus_watch, pipe1);
 
   webrtc1 = gst_bin_get_by_name (GST_BIN (pipe1), "send");
-  g_signal_connect (webrtc1, "on-negotiation-needed",
-      G_CALLBACK (_on_negotiation_needed), NULL);
+  g_signal_connect (webrtc1, "on-negotiation-needed", G_CALLBACK (_on_negotiation_needed), NULL);
   webrtc2 = gst_bin_get_by_name (GST_BIN (pipe1), "recv");
-  g_signal_connect (webrtc2, "pad-added", G_CALLBACK (_webrtc_pad_added),
-      pipe1);
-  g_signal_connect (webrtc1, "on-ice-candidate",
-      G_CALLBACK (_on_ice_candidate), webrtc2);
-  g_signal_connect (webrtc2, "on-ice-candidate",
-      G_CALLBACK (_on_ice_candidate), webrtc1);
+  g_signal_connect (webrtc2, "pad-added", G_CALLBACK (_webrtc_pad_added), pipe1);
+  g_signal_connect (webrtc1, "on-ice-candidate", G_CALLBACK (_on_ice_candidate), webrtc2);
+  g_signal_connect (webrtc2, "on-ice-candidate", G_CALLBACK (_on_ice_candidate), webrtc1);
 
   g_print ("Starting pipeline\n");
   gst_element_set_state (GST_ELEMENT (pipe1), GST_STATE_PLAYING);
 
   g_main_loop_run (loop);
+
+
+
+
+
+
+
+
+
+
 
   gst_element_set_state (GST_ELEMENT (pipe1), GST_STATE_NULL);
   g_print ("Pipeline stopped\n");

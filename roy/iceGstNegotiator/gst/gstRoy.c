@@ -13,30 +13,37 @@
 #include <string.h>
 
 
+//////// Variables ///////////////////////////////////////////////////////////////
 const char* url_sign_server = "wss://127.0.0.1:3434";
 
-GMainLoop *loop = NULL;
+
+static GstElement *pipe1, *webrtc1;
+static GMainLoop *loop = NULL;
+static SoupWebsocketConnection *ws_conn = NULL;
 
 
 
-/////JSON functions/////////////////////////////////////////////////////////////////////////////////
+
+
+
+//////////// JSON functions ///////////////////////////////////////////////////////////////////
 static gchar* json_stringify (JsonObject * object){
 
   JsonNode *root;
   JsonGenerator *generator;
-  gchar *text;
+  gchar *msg;
 
   /* Make it the root node */
   root = json_node_init_object (json_node_alloc (), object);
   generator = json_generator_new ();
   json_generator_set_root (generator, root);
-  text = json_generator_to_data (generator, NULL);
+  msg = json_generator_to_data (generator, NULL);
 
   /* Release everything */
   g_object_unref (generator);
   json_node_free (root);
 
-  return text;
+  return msg;
 }
 
 static JsonObject* json_parse(gchar *msg){
@@ -54,8 +61,26 @@ static JsonObject* json_parse(gchar *msg){
   return object;
 }
 
+///////////// Negotiation /////////////////////////////////////////////////////////
+void send_to(gchar *type, gchar *text, gint to){
 
-///////Signalling server connection///////////////////////////////////////////////////////////
+  JsonObject *data, *realdata;
+
+  data = json_object_new ();
+  json_object_set_string_member (data, "type", type);
+  json_object_set_string_member (data, "data", text);
+  json_object_set_int_member (data, "from", 0);
+  json_object_set_int_member (data, "to", to);
+
+  soup_websocket_connection_send_text(ws_conn, json_stringify(data));
+
+  json_object_unref (data);
+}
+
+
+
+
+/////// Signalling server connection ///////////////////////////////////////////////////////////
 
 static void on_sign_message(SoupWebsocketConnection *ws_conn, SoupWebsocketDataType dataType, GBytes *message, gpointer user_data){
 
@@ -144,14 +169,24 @@ static void on_sign_closed (SoupWebsocketConnection *ws_conn, gpointer user_data
 
 static void on_sign_server_connected(GObject *object, GAsyncResult *result, gpointer user_data){
 
-  SoupWebsocketConnection *ws_conn;
-
   ws_conn = soup_session_websocket_connect_finish(SOUP_SESSION(object), result, NULL);
 
   g_signal_connect(ws_conn, "message", G_CALLBACK(on_sign_message), NULL);
   g_signal_connect(ws_conn, "closed",  G_CALLBACK(on_sign_closed),  NULL); 
 
+
   g_print("Connected to the sign server succesfully\n");
+}
+
+
+///// Pipeline ////////////////////////
+static void start_pipeline(){
+
+
+
+
+
+
 }
 
 static void connect_webSocket_signServer(){
@@ -168,17 +203,18 @@ static void connect_webSocket_signServer(){
 }
 
 int main(int argc, char *argv[]){
-  g_print("Gst Server Active\n");
-
+  g_print("Gst Server running\n");
 
   loop = g_main_loop_new (NULL, FALSE);
 
 
   connect_webSocket_signServer();
 
+
+
   g_main_loop_run (loop);
 
-
+  g_object_unref(ws_conn);
   g_main_loop_unref(loop);
 
   return 0;

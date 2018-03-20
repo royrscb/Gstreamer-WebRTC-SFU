@@ -62,7 +62,7 @@ wss.on('connection', function(socket, req) {
     sockets[GST_SERVER_ID] = {socket:socket, ip:ip, id:GST_SERVER_ID};
 
     console.log  ("Gst server active!");
-    wss.broadcast("Gst server active!", "gstServerON", GST_SERVER_ID); 
+    wss.broadcast("))) Gst server active!", "gstServerON", GST_SERVER_ID); 
   }else{
 
     id = ids; ids++;
@@ -88,8 +88,8 @@ wss.on('connection', function(socket, req) {
     console.log("Message type:"+data.type+" from:"+data.from+" to:"+data.to+":"); console.log(data.data);
 
     if(data.to>=0 && sockets[data.to]!=undefined) sockets[data.to].socket.send(msg);
-    else if(data.to==SIGNALLING_SERVER_ID) console.log(data.data);
-    else if(data.to==BROADCAST) wss.broadcast("))) "+data.data,"txt",id,id);
+    else if(data.to==SIGNALLING_SERVER_ID) ;
+    else if(data.to==BROADCAST) wss.broadcast("))) "+data.data,"txt",data.from,data.from);
     else console.log("Destination ERROR");
     
   });
