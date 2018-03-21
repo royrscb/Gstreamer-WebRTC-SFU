@@ -27,6 +27,7 @@ static gint remoteIDtmp = 1;
 
 
 //////////// JSON functions ///////////////////////////////////////////////////////////////////
+
 static gchar* json_stringify (JsonObject * object){
 
   JsonNode *root;
@@ -73,12 +74,11 @@ void send_data_to(gchar *type, JsonObject *dataData, gint to){
   json_object_set_int_member (data, "to", to);
 
   soup_websocket_connection_send_text(ws_conn, json_stringify(data));
-
-  json_object_unref(data);
 }
 
 
 ////////// De propina ////////////////////////////////////////////////////////////////////
+
 static void handle_media_stream (GstPad * pad, GstElement * pipe, const char * convert_name, const char * sink_name){
 
   GstPad *qpad;
@@ -128,8 +128,7 @@ static void on_incoming_stream (GstElement * webrtc, GstPad * pad, GstElement * 
 
   GstElement *decodebin;
 
-  if (GST_PAD_DIRECTION (pad) != GST_PAD_SRC)
-    return;
+  if (GST_PAD_DIRECTION(pad) != GST_PAD_SRC) return;
 
   decodebin = gst_element_factory_make ("decodebin", NULL);
   g_signal_connect (decodebin, "pad-added", G_CALLBACK (on_incoming_decodebin_stream), pipe);
@@ -140,8 +139,6 @@ static void on_incoming_stream (GstElement * webrtc, GstPad * pad, GstElement * 
 
 
 ///////////// Negotiation ///////////////////////////////////////////////////////////////////////
-
-
 
 static void send_ice_candidate (GstElement * webrtc G_GNUC_UNUSED, guint mlineindex, gchar * candidate, gpointer user_data G_GNUC_UNUSED){
 
@@ -212,31 +209,23 @@ static void on_answer_created (GstPromise * promise, gpointer user_data){
 }
 
 
-static void on_negotiation_needed (GstElement * element, gpointer user_data){
+static void on_negotiation_needed (GstElement * wrbin, gpointer user_data){
 
   GstPromise *promise;
 
   promise = gst_promise_new_with_change_func (on_offer_created, user_data, NULL);
-  g_signal_emit_by_name (webrtc1, "create-offer", NULL, promise);
+  g_signal_emit_by_name (wrbin, "create-offer", NULL, promise);
 }
 
 
 /////// Pipeline ///////////////////////
-#define STUN_SERVER " stun-server=stun://stun.l.google.com:19302 "
-#define RTP_CAPS_OPUS "application/x-rtp,media=audio,encoding-name=OPUS,payload="
-#define RTP_CAPS_VP8 "application/x-rtp,media=video,encoding-name=VP8,payload="
 
 static void start_pipeline(){
 
   GError *error = NULL;
 
-  pipe1 =
-      gst_parse_launch ("webrtcbin name=sendrecv " STUN_SERVER
-      "videotestsrc pattern=ball ! queue ! vp8enc deadline=1 ! rtpvp8pay ! "
-      "queue ! " RTP_CAPS_VP8 "96 ! sendrecv. "
-      "audiotestsrc wave=red-noise ! queue ! opusenc ! rtpopuspay ! "
-      "queue ! " RTP_CAPS_OPUS "97 ! sendrecv. ",
-      &error);
+  pipe1 = gst_parse_launch ("videotestsrc ! queue ! vp8enc ! rtpvp8pay ! queue ! "
+        "application/x-rtp,media=video,payload=96,encoding-name=VP8 ! webrtcbin name=sendrecv", &error);
 
   if (error) { g_printerr ("Failed to parse launch: %s\n", error->message); g_error_free (error); if (pipe1) g_clear_object (&pipe1);}
 
@@ -253,7 +242,6 @@ static void start_pipeline(){
 
   g_print ("Starting pipeline\n");
   gst_element_set_state (GST_ELEMENT (pipe1), GST_STATE_PLAYING);
-
 }
 
 
@@ -289,10 +277,11 @@ static void on_sign_message(SoupWebsocketConnection *ws_conn, SoupWebsocketDataT
     const gint id = json_object_get_int_member(data_data, "id");
     const gchar *ip = json_object_get_string_member(data_data, "ip");
 
+    g_print("^^^ New conected %i = %s\n",id,ip);
+    g_print("Connecting with him");
+
     remoteIDtmp = id;
     start_pipeline();
-
-    g_print("^^^ New conected %i = %s\n",id,ip);
 
   }else if(g_strcmp0(type, "socketOFF")==0){
 
@@ -400,6 +389,13 @@ int main(int argc, char *argv[]){
   //start_pipeline();
 
   g_main_loop_run (loop);
+
+
+
+
+
+
+
 
   g_object_unref(ws_conn);
   g_main_loop_unref(loop);
