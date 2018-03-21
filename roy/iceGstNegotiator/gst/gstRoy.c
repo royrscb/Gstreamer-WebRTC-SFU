@@ -319,8 +319,6 @@ static void on_sign_message(SoupWebsocketConnection *ws_conn, SoupWebsocketDataT
 
     
     //creating the answer
-
-
     GstPromise *promise;
   
     promise = gst_promise_new_with_change_func(on_answer_created, user_data, NULL);
