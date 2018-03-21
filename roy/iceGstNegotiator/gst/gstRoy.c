@@ -74,69 +74,30 @@ void send_data_to(gchar *type, JsonObject *dataData, gint to){
   json_object_set_int_member (data, "to", to);
 
   soup_websocket_connection_send_text(ws_conn, json_stringify(data));
+
+  g_print(">>> Type:%s to:%i data: \n%s\n",type, to, json_stringify(dataData));
 }
 
 
-////////// De propina ////////////////////////////////////////////////////////////////////
+////////// PADS ////////////////////////////////////////////////////////////////////
 
-static void handle_media_stream (GstPad * pad, GstElement * pipe, const char * convert_name, const char * sink_name){
 
-  GstPad *qpad;
-  GstElement *q, *conv, *sink;
-  GstPadLinkReturn ret;
 
-  g_print ("Trying to handle stream with %s ! %s", convert_name, sink_name);
+static void _webrtc_pad_added (GstElement * webrtc, GstPad * new_pad, GstElement * pipe){
 
-  q = gst_element_factory_make ("queue", NULL);
-  g_assert_nonnull (q);
-  conv = gst_element_factory_make (convert_name, NULL);
-  g_assert_nonnull (conv);
-  sink = gst_element_factory_make (sink_name, NULL);
-  g_assert_nonnull (sink);
-  gst_bin_add_many (GST_BIN (pipe), q, conv, sink, NULL);
-  gst_element_sync_state_with_parent (q);
-  gst_element_sync_state_with_parent (conv);
-  gst_element_sync_state_with_parent (sink);
-  gst_element_link_many (q, conv, sink, NULL);
+  GstElement *out;
+  GstPad *sink;
 
-  qpad = gst_element_get_static_pad (q, "sink");
+  if (GST_PAD_DIRECTION (new_pad) != GST_PAD_SRC) return;
 
-  ret = gst_pad_link (pad, qpad);
-  g_assert_cmphex (ret, ==, GST_PAD_LINK_OK);
+  out = gst_parse_bin_from_description ("rtpvp8depay ! vp8dec ! videoconvert ! queue ! xvimagesink", TRUE, NULL);
+  gst_bin_add (GST_BIN (pipe), out);
+  gst_element_sync_state_with_parent (out);
+
+  sink = out->sinkpads->data;
+
+  gst_pad_link (new_pad, sink);
 }
-
-static void on_incoming_decodebin_stream (GstElement * decodebin, GstPad * pad, GstElement * pipe){
-
-  GstCaps *caps;
-  const gchar *name;
-
-  if (!gst_pad_has_current_caps (pad)) {
-    g_printerr ("Pad '%s' has no caps, can't do anything, ignoring\n", GST_PAD_NAME (pad));
-    return;
-  }
-
-  caps = gst_pad_get_current_caps (pad);
-  name = gst_structure_get_name (gst_caps_get_structure (caps, 0));
-
-  if (g_str_has_prefix (name, "video"))  handle_media_stream (pad, pipe, "videoconvert", "autovideosink");
-  else if (g_str_has_prefix (name, "audio")) handle_media_stream (pad, pipe, "audioconvert", "autoaudiosink");
-  else g_printerr ("Unknown pad %s, ignoring", GST_PAD_NAME (pad));
-  
-}
-
-static void on_incoming_stream (GstElement * webrtc, GstPad * pad, GstElement * pipe){
-
-  GstElement *decodebin;
-
-  if (GST_PAD_DIRECTION(pad) != GST_PAD_SRC) return;
-
-  decodebin = gst_element_factory_make ("decodebin", NULL);
-  g_signal_connect (decodebin, "pad-added", G_CALLBACK (on_incoming_decodebin_stream), pipe);
-  gst_bin_add (GST_BIN (pipe), decodebin);
-  gst_element_sync_state_with_parent (decodebin);
-  gst_element_link (webrtc, decodebin);
-}
-
 
 ///////////// Negotiation ///////////////////////////////////////////////////////////////////////
 
@@ -225,7 +186,12 @@ static void start_pipeline(){
   GError *error = NULL;
 
   pipe1 = gst_parse_launch ("videotestsrc ! queue ! vp8enc ! rtpvp8pay ! queue ! "
-        "application/x-rtp,media=video,payload=96,encoding-name=VP8 ! webrtcbin name=sendrecv", &error);
+        "application/x-rtp,media=video,payload=96,encoding-name=VP8 ! webrtcbin name=sendrecv ", &error);
+
+  //"videotestsrc ! queue ! vp8enc ! rtpvp8pay ! queue ! "
+        //"application/x-rtp,media=video,payload=96,encoding-name=VP8 ! webrtcbin name=sendrecv "
+  //"audiotestsrc ! queue ! opusenc ! rtpopuspay ! queue ! "
+        //"application/x-rtp,media=audio,payload=97,encoding-name=OPUS ! sendrecv."
 
   if (error) { g_printerr ("Failed to parse launch: %s\n", error->message); g_error_free (error); if (pipe1) g_clear_object (&pipe1);}
 
@@ -236,7 +202,7 @@ static void start_pipeline(){
   g_signal_connect(webrtc1, "on-negotiation-needed", G_CALLBACK (on_negotiation_needed), NULL);
   g_signal_connect(webrtc1, "on-ice-candidate", G_CALLBACK (send_ice_candidate), NULL);
   /* Incoming streams will be exposed via this signal */
-  g_signal_connect(webrtc1, "pad-added", G_CALLBACK (on_incoming_stream), pipe1);
+  g_signal_connect(webrtc1, "pad-added", G_CALLBACK (_webrtc_pad_added), pipe1);
   /* Lifetime is the same as the pipeline itself */
   gst_object_unref(webrtc1);
 
@@ -278,7 +244,6 @@ static void on_sign_message(SoupWebsocketConnection *ws_conn, SoupWebsocketDataT
     const gchar *ip = json_object_get_string_member(data_data, "ip");
 
     g_print("^^^ New conected %i = %s\n",id,ip);
-    g_print("Connecting with him");
 
     remoteIDtmp = id;
     start_pipeline();
