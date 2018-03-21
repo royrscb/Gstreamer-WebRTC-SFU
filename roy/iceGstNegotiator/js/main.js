@@ -27,15 +27,12 @@ var configuration = {
 //////////// Media ///////////////////////////////////////////////////////////////////////////////////////////////
 
 function start() {
-  console.log("Connecting to the signalling server, creating peerConnection and requesting local stream");
+  console.log("Creating peerConnection, requesting local stream and connecting to the signalling server");
   startButton.disabled = true;
   
-  connectSignServer();
-
   createPeerConnection();
 
-
-  var constraints = {video: true, audio: true};
+  var constraints = {video: true, audio: false};
 
   // Add local stream
   navigator.mediaDevices.getUserMedia(constraints).then(function(stream){ 
@@ -45,6 +42,8 @@ function start() {
     stream.getTracks().forEach(track => peerConnection.addTrack(track, stream));
 
   });
+
+  //connectSignServer();
 }
 
 function call(){

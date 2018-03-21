@@ -23,8 +23,6 @@ static SoupWebsocketConnection *ws_conn = NULL;
 
 static gint remoteIDtmp = 1;
 
-static void start_pipeline();//proviiiiiiiiiiiiiiiii
-
 
 
 
@@ -61,6 +59,22 @@ static JsonObject* json_parse(gchar *msg){
 
 
   return object;
+}
+
+
+void send_data_to(gchar *type, JsonObject *dataData, gint to){
+
+  JsonObject *data;
+
+  data = json_object_new ();
+  json_object_set_string_member (data, "type", type);
+  json_object_set_object_member (data, "data", dataData);
+  json_object_set_int_member (data, "from", 0);
+  json_object_set_int_member (data, "to", to);
+
+  soup_websocket_connection_send_text(ws_conn, json_stringify(data));
+
+  json_object_unref(data);
 }
 
 
@@ -126,20 +140,7 @@ static void on_incoming_stream (GstElement * webrtc, GstPad * pad, GstElement * 
 
 
 ///////////// Negotiation ///////////////////////////////////////////////////////////////////////
-void send_data_to(gchar *type, JsonObject *dataData, gint to){
 
-  JsonObject *data, *realdata;
-
-  data = json_object_new ();
-  json_object_set_string_member (data, "type", type);
-  json_object_set_object_member (data, "data", dataData);
-  json_object_set_int_member (data, "from", 0);
-  json_object_set_int_member (data, "to", to);
-
-  soup_websocket_connection_send_text(ws_conn, json_stringify(data));
-
-  json_object_unref(data);
-}
 
 
 static void send_ice_candidate (GstElement * webrtc G_GNUC_UNUSED, guint mlineindex, gchar * candidate, gpointer user_data G_GNUC_UNUSED){
@@ -150,12 +151,8 @@ static void send_ice_candidate (GstElement * webrtc G_GNUC_UNUSED, guint mlinein
   json_object_set_int_member (ice, "sdpMLineIndex", mlineindex);
 
   send_data_to("candidate", ice, remoteIDtmp);
-
-  json_object_unref(ice);
 }
 
-
-/* Offer created by our pipeline, to be sent to the peer */
 static void on_offer_created (GstPromise * promise, gpointer user_data){
 
   GstWebRTCSessionDescription *offer = NULL;
@@ -224,6 +221,41 @@ static void on_negotiation_needed (GstElement * element, gpointer user_data){
 }
 
 
+/////// Pipeline ///////////////////////
+#define STUN_SERVER " stun-server=stun://stun.l.google.com:19302 "
+#define RTP_CAPS_OPUS "application/x-rtp,media=audio,encoding-name=OPUS,payload="
+#define RTP_CAPS_VP8 "application/x-rtp,media=video,encoding-name=VP8,payload="
+
+static void start_pipeline(){
+
+  GError *error = NULL;
+
+  pipe1 =
+      gst_parse_launch ("webrtcbin name=sendrecv " STUN_SERVER
+      "videotestsrc pattern=ball ! queue ! vp8enc deadline=1 ! rtpvp8pay ! "
+      "queue ! " RTP_CAPS_VP8 "96 ! sendrecv. "
+      "audiotestsrc wave=red-noise ! queue ! opusenc ! rtpopuspay ! "
+      "queue ! " RTP_CAPS_OPUS "97 ! sendrecv. ",
+      &error);
+
+  if (error) { g_printerr ("Failed to parse launch: %s\n", error->message); g_error_free (error); if (pipe1) g_clear_object (&pipe1);}
+
+  webrtc1 = gst_bin_get_by_name (GST_BIN (pipe1), "sendrecv");
+
+
+  //This is the gstwebrtc entry point where we create the offer and so on. It will be called when the pipeline goes to PLAYING.
+  g_signal_connect(webrtc1, "on-negotiation-needed", G_CALLBACK (on_negotiation_needed), NULL);
+  g_signal_connect(webrtc1, "on-ice-candidate", G_CALLBACK (send_ice_candidate), NULL);
+  /* Incoming streams will be exposed via this signal */
+  g_signal_connect(webrtc1, "pad-added", G_CALLBACK (on_incoming_stream), pipe1);
+  /* Lifetime is the same as the pipeline itself */
+  gst_object_unref(webrtc1);
+
+  g_print ("Starting pipeline\n");
+  gst_element_set_state (GST_ELEMENT (pipe1), GST_STATE_PLAYING);
+
+}
+
 
 /////// Signalling server connection ///////////////////////////////////////////////////////////
 
@@ -270,7 +302,7 @@ static void on_sign_message(SoupWebsocketConnection *ws_conn, SoupWebsocketDataT
 
     g_print("vvv Disconected %i = %s\n",id,ip);
 
-  }else if(g_strcmp0(type, "offer")==0){start_pipeline();
+  }else if(g_strcmp0(type, "offer")==0){
 
     JsonObject *of = json_object_get_object_member(data, "data");
     const gchar *sdpText = json_object_get_string_member(of, "sdp");
@@ -286,8 +318,9 @@ static void on_sign_message(SoupWebsocketConnection *ws_conn, SoupWebsocketDataT
     g_signal_emit_by_name (webrtc1, "set-remote-description", offer, NULL);
 
     
-
     //creating the answer
+
+
     GstPromise *promise;
   
     promise = gst_promise_new_with_change_func(on_answer_created, user_data, NULL);
@@ -317,8 +350,6 @@ static void on_sign_message(SoupWebsocketConnection *ws_conn, SoupWebsocketDataT
     gint sdpMLineIndex = json_object_get_int_member(ice, "sdpMLineIndex");
 
     g_print("Candidate received: %s\n", json_stringify(ice));
-
-    //Add ice candidate sent by remote peer
     g_signal_emit_by_name (webrtc1, "add-ice-candidate", sdpMLineIndex, candidate);
 
   }else g_print("Unknown type! %s\n",msg);
@@ -343,42 +374,6 @@ static void on_sign_server_connected(GObject *object, GAsyncResult *result, gpoi
 
 
   g_print("Connected to the sign server succesfully\n");
-}
-
-
-#define STUN_SERVER " stun-server=stun://stun.l.google.com:19302 "
-#define RTP_CAPS_OPUS "application/x-rtp,media=audio,encoding-name=OPUS,payload="
-#define RTP_CAPS_VP8 "application/x-rtp,media=video,encoding-name=VP8,payload="
-
-///// Pipeline ////////////////////////
-static void start_pipeline(){
-
-  GError *error = NULL;
-
-  pipe1 =
-      gst_parse_launch ("webrtcbin name=sendrecv " STUN_SERVER
-      "videotestsrc pattern=ball ! queue ! vp8enc deadline=1 ! rtpvp8pay ! "
-      "queue ! " RTP_CAPS_VP8 "96 ! sendrecv. "
-      "audiotestsrc wave=red-noise ! queue ! opusenc ! rtpopuspay ! "
-      "queue ! " RTP_CAPS_OPUS "97 ! sendrecv. ",
-      &error);
-
-  if (error) { g_printerr ("Failed to parse launch: %s\n", error->message); g_error_free (error); if (pipe1) g_clear_object (&pipe1);}
-
-  webrtc1 = gst_bin_get_by_name (GST_BIN (pipe1), "sendrecv");
-
-
-  //This is the gstwebrtc entry point where we create the offer and so on. It will be called when the pipeline goes to PLAYING.
-  g_signal_connect(webrtc1, "on-negotiation-needed", G_CALLBACK (on_negotiation_needed), NULL);
-  g_signal_connect(webrtc1, "on-ice-candidate", G_CALLBACK (send_ice_candidate), NULL);
-  /* Incoming streams will be exposed via this signal */
-  g_signal_connect(webrtc1, "pad-added", G_CALLBACK (on_incoming_stream), pipe1);
-  /* Lifetime is the same as the pipeline itself */
-  gst_object_unref(webrtc1);
-
-  g_print ("Starting pipeline\n");
-  gst_element_set_state (GST_ELEMENT (pipe1), GST_STATE_PLAYING);
-
 }
 
 static void connect_webSocket_signServer(){
