@@ -14,7 +14,7 @@ hangupButton.onclick = hangup;
 
 //////// Variables //////////////////////////////////////////////////
 var localStream, peerConnection, wss, localID, remoteID=0, gstServerON = false;
-var web_socket_sign_url = 'wss://130.159.242.82:3434';
+var web_socket_sign_url = 'wss://localhost:3434';
 
 var configuration = {
 	'iceServers': [{
@@ -35,15 +35,15 @@ function start() {
   var constraints = {video: true, audio: false};
 
   // Add local stream
-  //navigator.mediaDevices.getUserMedia(constraints).then(function(stream){ 
+  navigator.mediaDevices.getUserMedia(constraints).then(function(stream){ 
 
-    //localStream = stream;
+    localStream = stream;
 
-    //stream.getTracks().forEach(track => peerConnection.addTrack(track, stream));
+    stream.getTracks().forEach(track => peerConnection.addTrack(track, stream));
 
     connectSignServer();
 
-  //});
+  });
 }
 
 function call(){
@@ -102,8 +102,7 @@ function connectSignServer(){
       console.log(data.data);
     }else if(data.type=="socketON"){
 
-      callButton.disabled = false;
-      
+      //callButton.disabled = false;
       //if(data.from==-1) wss.send(JSON.stringify({type:"socketON",data:{id:localID},to:data.data.id}));//ultraMegaMasterPROVI
       //remoteID = data.data.id;
 

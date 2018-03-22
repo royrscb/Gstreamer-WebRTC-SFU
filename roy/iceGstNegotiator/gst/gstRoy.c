@@ -333,10 +333,10 @@ static void connect_webSocket_signServer(){
 
   SoupSession *session;
   SoupMessage *msg;
-const char *https_aliases[] = {"wss", NULL};
+  const char *https_aliases[] = {"wss", NULL};
+
   session = soup_session_new_with_options (SOUP_SESSION_SSL_STRICT, TRUE,
       SOUP_SESSION_SSL_USE_SYSTEM_CA_FILE, TRUE,
-      //SOUP_SESSION_SSL_CA_FILE, "/etc/ssl/certs/ca-bundle.crt",
       SOUP_SESSION_HTTPS_ALIASES, https_aliases, NULL);
   g_object_set(G_OBJECT(session), SOUP_SESSION_SSL_STRICT, FALSE, NULL);
  

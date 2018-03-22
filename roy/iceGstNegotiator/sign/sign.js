@@ -3,37 +3,35 @@
 //////////////REQUIRES//////////////////////////////////////////////////////
 const WebSocket = require('ws');//web socket
 const fs = require('fs');
-const http = require('http'); const https = require('https');
+const https = require('https');
 const express = require('express');
 
 
 
 ////////////// CONSTS //////////////////////////////////////////////////////
-const port = 3434;
-
 const GST_SERVER_ID = 0;
 const SIGNALLING_SERVER_ID = -1;
 
 const BROADCAST = -2;
 
-
-////////////// VARS //////////////////////////////////////////////////////
-
-var sockets = [], ids=1;//sockets ids starts at 1
 const credentials = { 
         key: fs.readFileSync(__dirname + '/certs/key.pem'),
         cert: fs.readFileSync(__dirname + '/certs/cert.pem'),
 }
+const port = 3434;
 
 
-////////////// Run the servers //////////////////////////////////////////////////////
-var app = express().use(express.static(__dirname+'/../js/'));
-//http.createServer(app).listen(portSign);
-var serverSign = https.createServer(credentials,app).listen(port);
-console.log("Signalling server on port "+port);
+////////////// VARS //////////////////////////////////////////////////////
+var sockets = [], ids=1;//sockets ids starts at 1
 
-const wss = new WebSocket.Server({ server:serverSign });
-console.log("WebSocket server on port "+port); console.log("");
+
+
+////////////// Servers //////////////////////////////////////////////////////
+const app = express().use(express.static(__dirname+'/../js/'));
+const server = https.createServer(credentials,app).listen(port);
+const wss = new WebSocket.Server({ server:server });
+
+console.log("Signalling server on port "+port); console.log("");
 
 ////////////// txt processing //////////////////////////////////////////////////////
 process.openStdin().addListener("data", function(d) {
