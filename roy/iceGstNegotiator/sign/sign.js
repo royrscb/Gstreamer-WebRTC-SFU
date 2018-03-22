@@ -2,26 +2,40 @@
 
 //////////////REQUIRES//////////////////////////////////////////////////////
 const WebSocket = require('ws');//web socket
+const fs = require('fs');
+const http = require('http'); const https = require('https');
+const express = require('express');
 
 
-//////////////CONSTS//////////////////////////////////////////////////////
+
+////////////// CONSTS //////////////////////////////////////////////////////
+const port = 3434;
+
 const GST_SERVER_ID = 0;
 const SIGNALLING_SERVER_ID = -1;
 
 const BROADCAST = -2;
 
 
-//////////////vars//////////////////////////////////////////////////////
-var port = 3434;
+////////////// VARS //////////////////////////////////////////////////////
+
 var sockets = [], ids=1;//sockets ids starts at 1
+const credentials = { 
+        key: fs.readFileSync(__dirname + '/certs/key.pem'),
+        cert: fs.readFileSync(__dirname + '/certs/cert.pem'),
+}
 
 
-//////////////run the server//////////////////////////////////////////////////////
-const wss = new WebSocket.Server({ port: port });
+////////////// Run the servers //////////////////////////////////////////////////////
+var app = express().use(express.static(__dirname+'/../js/'));
+//http.createServer(app).listen(portSign);
+var serverSign = https.createServer(credentials,app).listen(port);
 console.log("Signalling server on port "+port);
 
+const wss = new WebSocket.Server({ server:serverSign });
+console.log("WebSocket server on port "+port); console.log("");
 
-//////////////txt processing//////////////////////////////////////////////////////
+////////////// txt processing //////////////////////////////////////////////////////
 process.openStdin().addListener("data", function(d) {
 
 	var txt = d.toString().trim();
@@ -51,7 +65,7 @@ process.openStdin().addListener("data", function(d) {
 });
 
 
-//////////////Connections handle//////////////////////////////////////////////////////
+////////////// Connections handle //////////////////////////////////////////////////////
 wss.on('connection', function(socket, req) {
 
   var id, ip = req.connection.remoteAddress;
@@ -108,7 +122,7 @@ wss.on('connection', function(socket, req) {
 
 
 
-//////////////Private Functions//////////////////////////////////////////////////////
+////////////// Private Functions //////////////////////////////////////////////////////
 
 
 wss.broadcast = function(msg, type = "txt", exception = null, from=SIGNALLING_SERVER_ID) {

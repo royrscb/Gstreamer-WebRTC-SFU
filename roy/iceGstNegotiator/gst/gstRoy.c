@@ -81,9 +81,9 @@ void send_data_to(gchar *type, JsonObject *dataData, gint to){
 
 ////////// PADS ////////////////////////////////////////////////////////////////////
 
-
-
 static void _webrtc_pad_added (GstElement * webrtc, GstPad * new_pad, GstElement * pipe){
+
+  g_print("Pad addeddddddddd\n");
 
   GstElement *out;
   GstPad *sink;
@@ -193,7 +193,7 @@ static void start_pipeline(){
   //"audiotestsrc ! queue ! opusenc ! rtpopuspay ! queue ! "
         //"application/x-rtp,media=audio,payload=97,encoding-name=OPUS ! sendrecv."
 
-  if (error) { g_printerr ("Failed to parse launch: %s\n", error->message); g_error_free (error); if (pipe1) g_clear_object (&pipe1);}
+  if (error) { g_printerr("Failed to parse launch: %s\n", error->message); g_error_free(error); if(pipe1)g_clear_object (&pipe1);}
 
   webrtc1 = gst_bin_get_by_name (GST_BIN (pipe1), "sendrecv");
 
@@ -325,6 +325,7 @@ static void on_sign_server_connected(GObject *object, GAsyncResult *result, gpoi
   g_signal_connect(ws_conn, "closed",  G_CALLBACK(on_sign_closed),  NULL); 
 
 
+  soup_websocket_connection_send_text(ws_conn, "{\"type\":\"txt\",\"data\":\"Im the GST server!\\n\",\"from\":\"0\",\"to\":\"-1\"}");
   g_print("Connected to the sign server succesfully\n");
 }
 
@@ -332,8 +333,11 @@ static void connect_webSocket_signServer(){
 
   SoupSession *session;
   SoupMessage *msg;
-
-  session = soup_session_new();
+const char *https_aliases[] = {"wss", NULL};
+  session = soup_session_new_with_options (SOUP_SESSION_SSL_STRICT, TRUE,
+      SOUP_SESSION_SSL_USE_SYSTEM_CA_FILE, TRUE,
+      //SOUP_SESSION_SSL_CA_FILE, "/etc/ssl/certs/ca-bundle.crt",
+      SOUP_SESSION_HTTPS_ALIASES, https_aliases, NULL);
   g_object_set(G_OBJECT(session), SOUP_SESSION_SSL_STRICT, FALSE, NULL);
  
   msg = soup_message_new(SOUP_METHOD_GET, url_sign_server);
@@ -350,8 +354,6 @@ int main(int argc, char *argv[]){
 
 
   connect_webSocket_signServer();
-
-  //start_pipeline();
 
   g_main_loop_run (loop);
 
