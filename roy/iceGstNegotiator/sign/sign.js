@@ -11,7 +11,6 @@ const express = require('express');
 ////////////// CONSTS //////////////////////////////////////////////////////
 const GST_SERVER_ID = 0;
 const SIGNALLING_SERVER_ID = -1;
-
 const BROADCAST = -2;
 
 const credentials = { 
@@ -22,7 +21,8 @@ const port = 3434;
 
 
 ////////////// VARS //////////////////////////////////////////////////////
-var sockets = [], ids=1;//sockets ids starts at 1
+var sockets = []; 
+var ids=1; //sockets ids starts at 1
 
 
 
@@ -31,7 +31,7 @@ const app = express().use(express.static(__dirname+'/../js/'));
 const server = https.createServer(credentials,app).listen(port);
 const wss = new WebSocket.Server({ server:server });
 
-console.log("Signalling server on port "+port); console.log("");
+console.log("Signalling server on "+port); console.log("");
 
 ////////////// txt processing //////////////////////////////////////////////////////
 process.openStdin().addListener("data", function(d) {
@@ -97,7 +97,7 @@ wss.on('connection', function(socket, req) {
 
 
     console.log("----------------------------------------------------------------");
-    console.log("Message type:"+data.type+" from:"+data.from+" to:"+data.to+":"); console.log(data.data);
+    console.log("Message type:"+data.type+" from:"+data.from+" to:"+data.to); console.log(data.data);
 
     if(data.to>=0 && sockets[data.to]!=undefined) sockets[data.to].socket.send(msg);
     else if(data.to==SIGNALLING_SERVER_ID) ;

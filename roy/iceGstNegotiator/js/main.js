@@ -1,8 +1,8 @@
-// JavaScript variables associated with HTML5 video elements in the page
+// Author: Roy Ros Cobo
+
 var localVideo = document.getElementById("localVideo");
 var remoteVideo = document.getElementById("remoteVideo");
 
-// JavaScript variables assciated with call management buttons in the page
 var startButton = document.getElementById("startButton");
 var callButton = document.getElementById("callButton");
 var hangupButton = document.getElementById("hangupButton");
@@ -14,7 +14,7 @@ hangupButton.onclick = hangup;
 
 //////// Variables //////////////////////////////////////////////////
 var localStream, peerConnection, wss, localID, remoteID=0, gstServerON = false;
-var web_socket_sign_url = 'wss://localhost:3434';
+var web_socket_sign_url = 'wss://'+window.location.host;
 
 var configuration = {
 	'iceServers': [{
@@ -23,11 +23,10 @@ var configuration = {
 };
              
 
-
 //////////// Media ///////////////////////////////////////////////////////////////////////////////////////////////
 
 function start() {
-  console.log("Creating peerConnection, requesting local stream and connecting to the signalling server");
+
   startButton.disabled = true;
   
   createPeerConnection();
@@ -37,6 +36,7 @@ function start() {
   // Add local stream
   navigator.mediaDevices.getUserMedia(constraints).then(function(stream){ 
 
+    console.log("Requesting local media");
     localStream = stream;
 
     stream.getTracks().forEach(track => peerConnection.addTrack(track, stream));
@@ -55,7 +55,7 @@ function call(){
     console.log('Setting local description');
     peerConnection.setLocalDescription(description);
 
-    console.log("Calling, sending offer:"); console.log(description);
+    console.log("%c>>>", 'color: red'," Calling, sending offer:"); console.log(description);
     wss.send(JSON.stringify({type:"offer", data:description, to:remoteID, from:localID}));
   });
 }
@@ -73,10 +73,9 @@ function hangup(){
 }
 
 
-
 function connectSignServer(){
 
-  // Connect to signalling server
+  console.log("Connecting to the signalling server");
   wss = new WebSocket(web_socket_sign_url);
 
 
@@ -85,14 +84,14 @@ function connectSignServer(){
     var data = JSON.parse(msg.data);
 
     console.log("------------------------------------------");
-    console.log("<<<Type:"+data.type+" from:"+data.from+" to:"+data.to);
+    console.log("%c<<< ", 'color: green', "Type:"+data.type+" from:"+data.from+" to:"+data.to);
 
     if(data.type=="txt") console.log(data.data);
     else if(data.type=="id"){
 
       localID = data.data;
 
-      console.log('%c My id is:'+localID, 'background: #222; color: #bada55');
+      console.log('%c My id is:'+localID+' ', 'background: black; color: white');
 
     }else if(data.type=="gstServerON"){
 
@@ -112,30 +111,30 @@ function connectSignServer(){
       console.log("vvv Disconnected "+data.data.id+" = "+data.data.ip);
     }else if(data.type=="offer"){
 
-      console.log('Offer received:'); console.log(data.data);
+      console.log('<<< Offer received:'); console.log(data.data);
       peerConnection.setRemoteDescription(new RTCSessionDescription(data.data));
 
       peerConnection.createAnswer().then(function(description){
 
         peerConnection.setLocalDescription(description);
 
-        console.log('Sending answer:'); console.log(description);
+        console.log('%c>>>', 'color: red','Sending answer:'); console.log(description);
         wss.send(JSON.stringify({type:"answer", data:description, to:remoteID, from:localID}));
       });
 
     }else if(data.type=="answer"){
 
-      console.log("Answer received:"); console.log(data.data);
+      console.log("<<< Answer received:"); console.log(data.data);
 
       peerConnection.setRemoteDescription(new RTCSessionDescription(data.data));
 
     }else if(data.type=="candidate"){
 
-      console.log("Candidate received:"); console.log(data.data);
+      console.log("<<< Candidate received:"); console.log(data.data);
 
       peerConnection.addIceCandidate(new RTCIceCandidate(data.data));
 
-    }else console.log("Unkown type! "+data);
+    }else{ console.log("Type ERROR: "); console.log(data); } 
 
   }
 }

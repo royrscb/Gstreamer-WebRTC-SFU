@@ -1,4 +1,8 @@
-//Roy Ros Cobo
+/*  
+ * Author: Roy Ros Cobo
+ *
+ * $ gcc gstRoy.c $(pkg-config --cflags --libs gstreamer-webrtc-1.0 gstreamer-sdp-1.0 libsoup-2.4 json-glib-1.0) -o gstRoy
+*/
 
 #include <gst/gst.h>
 #include <gst/sdp/sdp.h>
@@ -6,7 +10,6 @@
 #define GST_USE_UNSTABLE_API
 #include <gst/webrtc/webrtc.h>
 
-/* For signalling */
 #include <libsoup/soup.h>
 #include <json-glib/json-glib.h>
 
@@ -81,7 +84,7 @@ void send_data_to(gchar *type, JsonObject *dataData, gint to){
 
 ////////// PADS ////////////////////////////////////////////////////////////////////
 
-static void _webrtc_pad_added (GstElement * webrtc, GstPad * new_pad, GstElement * pipe){
+static void _webrtc_pad_added(GstElement * webrtc, GstPad * new_pad, GstElement * pipe){
 
   g_print("Pad addeddddddddd\n");
 
@@ -101,7 +104,7 @@ static void _webrtc_pad_added (GstElement * webrtc, GstPad * new_pad, GstElement
 
 ///////////// Negotiation ///////////////////////////////////////////////////////////////////////
 
-static void send_ice_candidate (GstElement * webrtc G_GNUC_UNUSED, guint mlineindex, gchar * candidate, gpointer user_data G_GNUC_UNUSED){
+static void send_ice_candidate(GstElement * webrtc G_GNUC_UNUSED, guint mlineindex, gchar * candidate, gpointer user_data G_GNUC_UNUSED){
 
   JsonObject *ice = json_object_new ();
 
@@ -111,7 +114,7 @@ static void send_ice_candidate (GstElement * webrtc G_GNUC_UNUSED, guint mlinein
   send_data_to("candidate", ice, remoteIDtmp);
 }
 
-static void on_offer_created (GstPromise * promise, gpointer user_data){
+static void on_offer_created(GstPromise * promise, gpointer user_data){
 
   GstWebRTCSessionDescription *offer = NULL;
   const GstStructure *reply;
@@ -140,7 +143,7 @@ static void on_offer_created (GstPromise * promise, gpointer user_data){
   gst_webrtc_session_description_free (offer);
 }
 
-static void on_answer_created (GstPromise * promise, gpointer user_data){
+static void on_answer_created(GstPromise * promise, gpointer user_data){
 
   GstWebRTCSessionDescription *answer = NULL;
   const GstStructure *reply;
@@ -170,7 +173,7 @@ static void on_answer_created (GstPromise * promise, gpointer user_data){
 }
 
 
-static void on_negotiation_needed (GstElement * wrbin, gpointer user_data){
+static void on_negotiation_needed(GstElement * wrbin, gpointer user_data){
 
   GstPromise *promise;
 
@@ -179,19 +182,17 @@ static void on_negotiation_needed (GstElement * wrbin, gpointer user_data){
 }
 
 
-/////// Pipeline ///////////////////////
+/////// Pipeline ///////////
+#define VIDEO_COD "vp8enc ! rtpvp8pay ! queue ! application/x-rtp,media=video,payload=96,encoding-name=VP8"
+#define AUDIO_COD "opusenc ! rtpopuspay ! queue ! application/x-rtp,media=audio,payload=97,encoding-name=OPUS"
 
 static void start_pipeline(){
 
   GError *error = NULL;
 
-  pipe1 = gst_parse_launch ("videotestsrc ! queue ! vp8enc ! rtpvp8pay ! queue ! "
-        "application/x-rtp,media=video,payload=96,encoding-name=VP8 ! webrtcbin name=sendrecv ", &error);
-
-  //"videotestsrc ! queue ! vp8enc ! rtpvp8pay ! queue ! "
-        //"application/x-rtp,media=video,payload=96,encoding-name=VP8 ! webrtcbin name=sendrecv "
-  //"audiotestsrc ! queue ! opusenc ! rtpopuspay ! queue ! "
-        //"application/x-rtp,media=audio,payload=97,encoding-name=OPUS ! sendrecv."
+  pipe1 = gst_parse_launch ("webrtcbin name=sendrecv "
+    "videotestsrc ! queue ! "VIDEO_COD" ! sendrecv.sink_0 "
+    , &error);
 
   if (error) { g_printerr("Failed to parse launch: %s\n", error->message); g_error_free(error); if(pipe1)g_clear_object (&pipe1);}
 
@@ -351,7 +352,6 @@ int main(int argc, char *argv[]){
   g_print("Gst Server running\n");
 
   loop = g_main_loop_new (NULL, FALSE);
-
 
   connect_webSocket_signServer();
 
