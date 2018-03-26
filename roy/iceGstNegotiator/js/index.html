@@ -5,18 +5,29 @@
     
     <link rel="shortcut icon" href="favicon.ico" type="image/x-icon" />
     <title>Gst SFU</title>
+    
   </head>
 
   <body>
-    <!-- <video id="localVideo" width="50%" height="50%">Your browser doesn't support video</video> -->
-    <video id="remoteVideo" autoplay width="50%" height="50%">Your browser doesn't support video</video><br>
-    
-    <button id="startButton" style="height: 60px; width: 110px;">Start</button>
-    <button id="callButton" disabled="true">Call</button>
-    <button id="hangupButton" disabled="true">Hang up</button>
 
+    <div id="videos">
+      <!-- <video id="localVideo" width="50%" height="50%"></video> -->
+      <video id="remoteVideo" autoplay width="50%" height="50%"></video>
+    </div><br><br>
+
+    <div id="buttons">
+      <button id="startButton" style="height: 60px; width: 110px;">Start</button>
+      <button id="callButton" disabled="true">Call</button>
+      <button id="hangupButton" disabled="true">Hang up</button>
+    </div><br><br><br><br>
+
+
+    <div id="inputs">
+      <input id="inputSend" type="text" size="55" placeholder="Write text or JSON to send">
+    </div>
 
 
     <script src="main.js"></script>
+
   </body>
 </html>

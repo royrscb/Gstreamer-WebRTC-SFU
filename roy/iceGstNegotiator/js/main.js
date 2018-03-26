@@ -13,7 +13,10 @@ hangupButton.onclick = hangup;
 
 
 //////// Variables //////////////////////////////////////////////////
-var localStream, peerConnection, wss, localID, remoteID=0, gstServerON = false;
+const GST_SERVER_ID = 0;
+const BROADCAST=-2;
+
+var localStream, peerConnection, wss, localID, remoteID=GST_SERVER_ID, gstServerON = false;
 var web_socket_sign_url = 'wss://'+window.location.host;
 
 var configuration = {
@@ -166,3 +169,38 @@ function createPeerConnection(){
     hangupButton.disabled = false;
   }
 }
+
+
+/////////// Send text //////////////////////////////////
+const inputSend = document.getElementById("inputSend");
+inputSend.addEventListener("keyup", function(event) {
+  if (localID!=undefined && event.key === "Enter") {
+      
+      var txt = inputSend.value;
+      inputSend.value = '';
+
+      var isTxt = txt[0]!="{";
+   
+
+      if(isTxt){ 
+
+        var to = BROADCAST;
+
+        if(!isNaN(txt[0])) { to=txt[0]; txt = txt.substring(1,txt.length); }
+
+        console.log('%c>>>', 'color: red','Type:txt from:'+localID+' to:'+to); 
+        console.log(txt);
+        
+        wss.send(JSON.stringify({type:"txt", data:txt, from:localID, to:to })); 
+
+      }else{
+
+        var data = JSON.parse(txt);
+
+        console.log('%c>>>', 'color: red','Type:'+data.type+' from:'+data.from+' to:'+data.to); 
+        console.log(data.data);
+        
+        wss.send(txt);
+      }
+  }
+});
