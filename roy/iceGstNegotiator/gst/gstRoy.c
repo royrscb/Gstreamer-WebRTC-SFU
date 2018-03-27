@@ -181,37 +181,6 @@ static void negotiate(GstElement * wrbin, gpointer user_data){
   g_signal_emit_by_name (wrbin, "create-offer", NULL, promise);
 }
 
-
-/////// Pipeline ///////////
-#define VIDEO_COD "vp8enc ! rtpvp8pay ! queue ! application/x-rtp,media=video,payload=96,encoding-name=VP8"
-#define AUDIO_COD "opusenc ! rtpopuspay ! queue ! application/x-rtp,media=audio,payload=97,encoding-name=OPUS"
-
-static void start_pipeline(){
-
-  GError *error = NULL;
-
-  pipe1 = gst_parse_launch ("webrtcbin name=sendrecv "
-    "videotestsrc ! queue ! "VIDEO_COD" ! sendrecv.sink_0 "
-    , &error);
-
-  if (error) { g_printerr("Failed to parse launch: %s\n", error->message); g_error_free(error); if(pipe1)g_clear_object (&pipe1);}
-
-  webrtc1 = gst_bin_get_by_name (GST_BIN (pipe1), "sendrecv");
-
-
-  //This is the gstwebrtc entry point where we create the offer and so on. It will be called when the pipeline goes to PLAYING.
-  //***g_signal_connect(webrtc1, "on-negotiation-needed", G_CALLBACK (negotiate), NULL);
-  g_signal_connect(webrtc1, "on-ice-candidate", G_CALLBACK (send_ice_candidate), NULL);
-  /* Incoming streams will be exposed via this signal */
-  g_signal_connect(webrtc1, "pad-added", G_CALLBACK (_webrtc_pad_added), pipe1);
-  /* Lifetime is the same as the pipeline itself */
-  gst_object_unref(webrtc1);
-
-  g_print ("Starting pipeline\n");
-  gst_element_set_state (GST_ELEMENT (pipe1), GST_STATE_PLAYING);
-}
-
-
 /////// Signalling server connection ///////////////////////////////////////////////////////////
 
 static void on_sign_message(SoupWebsocketConnection *ws_conn, SoupWebsocketDataType dataType, GBytes *message, gpointer user_data){
@@ -347,6 +316,36 @@ static void connect_webSocket_signServer(){
 
   soup_session_websocket_connect_async(session, msg, "gstServer", (char **)NULL, NULL, on_sign_server_connected, NULL);
 }
+
+/////// Pipeline ///////////
+#define VIDEO_COD "vp8enc ! rtpvp8pay ! queue ! application/x-rtp,media=video,payload=96,encoding-name=VP8"
+#define AUDIO_COD "opusenc ! rtpopuspay ! queue ! application/x-rtp,media=audio,payload=97,encoding-name=OPUS"
+
+static void start_pipeline(){
+
+  GError *error = NULL;
+
+  pipe1 = gst_parse_launch ("webrtcbin name=sendrecv "
+    "videotestsrc ! queue ! "VIDEO_COD" ! sendrecv.sink_0 "
+    , &error);
+
+  if (error) { g_printerr("Failed to parse launch: %s\n", error->message); g_error_free(error); if(pipe1)g_clear_object (&pipe1);}
+
+  webrtc1 = gst_bin_get_by_name (GST_BIN (pipe1), "sendrecv");
+
+
+  //This is the gstwebrtc entry point where we create the offer and so on. It will be called when the pipeline goes to PLAYING.
+  //***g_signal_connect(webrtc1, "on-negotiation-needed", G_CALLBACK (negotiate), NULL);
+  g_signal_connect(webrtc1, "on-ice-candidate", G_CALLBACK (send_ice_candidate), NULL);
+  /* Incoming streams will be exposed via this signal */
+  g_signal_connect(webrtc1, "pad-added", G_CALLBACK (_webrtc_pad_added), pipe1);
+  /* Lifetime is the same as the pipeline itself */
+  gst_object_unref(webrtc1);
+
+  g_print ("Starting pipeline\n");
+  gst_element_set_state (GST_ELEMENT (pipe1), GST_STATE_PLAYING);
+}
+
 
 int main(int argc, char *argv[]){
 
