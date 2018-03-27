@@ -86,7 +86,7 @@ void send_data_to(gchar *type, JsonObject *dataData, gint to){
 
 static void _webrtc_pad_added(GstElement * webrtc, GstPad * new_pad, GstElement * pipe){
 
-  g_print("Pad addeddddddddd\n");
+  g_print("Pad addedddddd\n");
 
   GstElement *out;
   GstPad *sink;
