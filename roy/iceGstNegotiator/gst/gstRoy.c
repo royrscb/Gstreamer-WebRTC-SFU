@@ -19,8 +19,8 @@
 //////// Variables ///////////////////////////////////////////////////////////////
 const char* url_sign_server = "wss://127.0.0.1:3434";
 
-
-static GstElement *pipe1, *webrtc1;
+const gint zero=0, uno=1;
+static GstElement *pipe1, *webrtc1, *webrtc2;
 static GMainLoop *loop = NULL;
 static SoupWebsocketConnection *ws_conn = NULL;
 
@@ -66,19 +66,20 @@ static JsonObject* json_parse(gchar *msg){
 }
 
 
-void send_data_to(gchar *type, JsonObject *dataData, gint to){
+void send_data_to(gchar *type,const gint index, JsonObject *dataData, gint to){
 
   JsonObject *data;
 
   data = json_object_new ();
   json_object_set_string_member (data, "type", type);
+  json_object_set_int_member (data, "index", index);
   json_object_set_object_member (data, "data", dataData);
   json_object_set_int_member (data, "from", 0);
   json_object_set_int_member (data, "to", to);
 
   soup_websocket_connection_send_text(ws_conn, json_stringify(data));
 
-  g_print(">>> Type:%s to:%i data: \n%s\n",type, to, json_stringify(dataData));
+  g_print(">>> Type:%s index:%i to:%i data: \n%s\n",type, index, to, json_stringify(dataData));
 }
 
 
@@ -104,18 +105,20 @@ static void _webrtc_pad_added(GstElement * webrtc, GstPad * new_pad, GstElement 
 
 ///////////// Negotiation ///////////////////////////////////////////////////////////////////////
 
-static void send_ice_candidate(GstElement * webrtc G_GNUC_UNUSED, guint mlineindex, gchar * candidate, gpointer user_data G_GNUC_UNUSED){
+static void send_ice_candidate(GstElement * webrtc G_GNUC_UNUSED, guint mlineindex, gchar * candidate, const gint *index){
+
+  g_print("Enviant candidat %i\n", *index);
 
   JsonObject *ice = json_object_new ();
 
   json_object_set_string_member(ice, "candidate", candidate);
   json_object_set_int_member (ice, "sdpMLineIndex", mlineindex);
 
-  send_data_to("candidate", ice, remoteIDtmp);
+  send_data_to("candidate", *index, ice, remoteIDtmp);
 }
 
-static void on_offer_created(GstPromise * promise, gpointer user_data){
-
+static void on_offer_created(GstPromise * promise, gint *index){
+  g_print("Creating offer of index: %i\n", *index);
   GstWebRTCSessionDescription *offer = NULL;
   const GstStructure *reply;
 
@@ -129,21 +132,21 @@ static void on_offer_created(GstPromise * promise, gpointer user_data){
   gchar *sdp = gst_sdp_message_as_text (offer->sdp);
   g_print ("Setting local desc(offer) and sending created offer:\n%s\n", sdp);
 
-  g_signal_emit_by_name (webrtc1, "set-local-description", offer, NULL);
-
+  if(*index==0) g_signal_emit_by_name (webrtc1, "set-local-description", offer, NULL);
+  else if(*index==1) g_signal_emit_by_name (webrtc2, "set-local-description", offer, NULL);
 
   JsonObject *data = json_object_new();
   json_object_set_string_member(data, "type", "offer");
   json_object_set_string_member(data, "sdp", sdp);
   g_free(sdp);
 
-  send_data_to("offer", data, remoteIDtmp);
+  send_data_to("offer", *index, data, remoteIDtmp);
 
   json_object_unref(data);
   gst_webrtc_session_description_free (offer);
 }
 
-static void on_answer_created(GstPromise * promise, gpointer user_data){
+static void on_answer_created(GstPromise * promise, gpointer wrbin){
 
   GstWebRTCSessionDescription *answer = NULL;
   const GstStructure *reply;
@@ -158,7 +161,7 @@ static void on_answer_created(GstPromise * promise, gpointer user_data){
   gchar *sdp = gst_sdp_message_as_text(answer->sdp);
   g_print ("Setting local desc(answer) and sending created answer:\n%s\n", sdp);
 
-  g_signal_emit_by_name (webrtc1, "set-local-description", answer, NULL);
+  g_signal_emit_by_name (wrbin, "set-local-description", answer, NULL);
 
 
   JsonObject *data = json_object_new();
@@ -166,18 +169,18 @@ static void on_answer_created(GstPromise * promise, gpointer user_data){
   json_object_set_string_member(data, "sdp", sdp);
   g_free(sdp);
 
-  send_data_to("answer", data, remoteIDtmp);
+  send_data_to("answer", 99, data, remoteIDtmp);
 
   json_object_unref(data);
   gst_webrtc_session_description_free(answer);
 }
 
 
-static void negotiate(GstElement * wrbin, gpointer user_data){
-
+static void negotiate(GstElement * wrbin,const gint *index){
+  g_print("Negotiate for %i\n", *index);
   GstPromise *promise;
 
-  promise = gst_promise_new_with_change_func (on_offer_created, user_data, NULL);
+  promise = gst_promise_new_with_change_func((GstPromiseChangeFunc) on_offer_created,(gpointer) index, NULL);
   g_signal_emit_by_name (wrbin, "create-offer", NULL, promise);
 }
 
@@ -216,7 +219,8 @@ static void on_sign_message(SoupWebsocketConnection *ws_conn, SoupWebsocketDataT
     g_print("^^^ New conected %i = %s\n",id,ip);
 
     remoteIDtmp = id;
-    negotiate(webrtc1,NULL);
+    negotiate(webrtc1,&zero);
+    negotiate(webrtc2,&uno);
 
   }else if(g_strcmp0(type, "socketOFF")==0){
 
@@ -252,6 +256,8 @@ static void on_sign_message(SoupWebsocketConnection *ws_conn, SoupWebsocketDataT
         
   }else if(g_strcmp0(type, "answer")==0){
 
+    const gint index = json_object_get_int_member(data,"index");
+
     JsonObject *ans = json_object_get_object_member(data, "data");
     const gchar *sdpText = json_object_get_string_member(ans, "sdp");
 
@@ -264,9 +270,12 @@ static void on_sign_message(SoupWebsocketConnection *ws_conn, SoupWebsocketDataT
 
     GstWebRTCSessionDescription *answer;
     answer = gst_webrtc_session_description_new(GST_WEBRTC_SDP_TYPE_ANSWER, sdp);
-    g_signal_emit_by_name (webrtc1, "set-remote-description", answer, NULL);
+    if(index==0) g_signal_emit_by_name (webrtc1, "set-remote-description", answer, NULL);
+    else if(index==1) g_signal_emit_by_name (webrtc2, "set-remote-description", answer, NULL);
 
   }else if(g_strcmp0(type, "candidate")==0){
+
+    const gint index = json_object_get_int_member(data,"index");
 
     JsonObject *ice = json_object_get_object_member(data, "data");
     const gchar *candidate = json_object_get_string_member(ice, "candidate");
@@ -274,7 +283,8 @@ static void on_sign_message(SoupWebsocketConnection *ws_conn, SoupWebsocketDataT
     gint sdpMLineIndex = json_object_get_int_member(ice, "sdpMLineIndex");
 
     g_print("Candidate received: %s\n", json_stringify(ice));
-    g_signal_emit_by_name (webrtc1, "add-ice-candidate", sdpMLineIndex, candidate);
+    if(index==0) g_signal_emit_by_name (webrtc1, "add-ice-candidate", sdpMLineIndex, candidate);
+    else if(index==1) g_signal_emit_by_name (webrtc2, "add-ice-candidate", sdpMLineIndex, candidate);
 
   }else g_print("Unknown type! %s\n",msg);
 
@@ -326,22 +336,27 @@ static void start_pipeline(){
 
   GError *error = NULL;
 
-  pipe1 = gst_parse_launch ("webrtcbin name=sendrecv "
-    "videotestsrc ! queue ! "VIDEO_COD" ! sendrecv. "
+  pipe1 = gst_parse_launch ("webrtcbin name=smpte webrtcbin name=ball "
+    "videotestsrc pattern=smpte ! queue ! "VIDEO_COD" ! smpte. "
+    "videotestsrc pattern=ball ! queue ! "VIDEO_COD" ! ball."
     , &error);
 
   if (error) { g_printerr("Failed to parse launch: %s\n", error->message); g_error_free(error); if(pipe1)g_clear_object (&pipe1);}
 
-  webrtc1 = gst_bin_get_by_name (GST_BIN (pipe1), "sendrecv");
+  webrtc1 = gst_bin_get_by_name(GST_BIN (pipe1), "smpte");
+  webrtc2 = gst_bin_get_by_name(GST_BIN (pipe1), "ball");
 
 
   //This is the gstwebrtc entry point where we create the offer and so on. It will be called when the pipeline goes to PLAYING.
   //***g_signal_connect(webrtc1, "on-negotiation-needed", G_CALLBACK (negotiate), NULL);
-  g_signal_connect(webrtc1, "on-ice-candidate", G_CALLBACK (send_ice_candidate), NULL);
+  g_signal_connect(webrtc1, "on-ice-candidate", G_CALLBACK (send_ice_candidate), (gpointer) &zero);
+  g_signal_connect(webrtc2, "on-ice-candidate", G_CALLBACK (send_ice_candidate), (gpointer) &uno);
   /* Incoming streams will be exposed via this signal */
   g_signal_connect(webrtc1, "pad-added", G_CALLBACK (_webrtc_pad_added), pipe1);
+  g_signal_connect(webrtc2, "pad-added", G_CALLBACK (_webrtc_pad_added), pipe1);
   /* Lifetime is the same as the pipeline itself */
   gst_object_unref(webrtc1);
+  gst_object_unref(webrtc2);
 
   g_print ("Starting pipeline\n");
   gst_element_set_state (GST_ELEMENT (pipe1), GST_STATE_PLAYING);

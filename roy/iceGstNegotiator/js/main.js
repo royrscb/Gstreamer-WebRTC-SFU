@@ -1,7 +1,9 @@
 // Author: Roy Ros Cobo
 
 var localVideo = document.getElementById("localVideo");
-var remoteVideo = document.getElementById("remoteVideo");
+var remoteVideos = [];
+remoteVideos[0] = document.getElementById("remoteVideo");
+remoteVideos[1] = document.getElementById("remoteVideo2");
 
 var startButton = document.getElementById("startButton");
 var negotiateButton = document.getElementById("negotiateButton");
@@ -16,7 +18,7 @@ hangupButton.onclick = hangup;
 const GST_SERVER_ID = 0;
 const BROADCAST=-2;
 
-var localStream, peerConnection, wss, localID, remoteID=GST_SERVER_ID, gstServerON = false;
+var localStream, pcs = [], wss, localID, remoteID=GST_SERVER_ID, gstServerON = false;
 var web_socket_sign_url = 'wss://'+window.location.host;
 
 var configuration = {
@@ -32,24 +34,25 @@ function start() {
 
   startButton.disabled = true;
   
-  createPeerConnection();
+  //createPeerConnection();
 
-  var constraints = {video: true, audio: false};
+  //var constraints = {video: false, audio: false};
 
   // Add local stream
-  navigator.mediaDevices.getUserMedia(constraints).then(function(stream){ 
+  //navigator.mediaDevices.getUserMedia(constraints).then(function(stream){ 
 
-    console.log("Requesting local media");
-    localStream = stream;
+    //console.log("Requesting local media");
+    //localStream = stream;
 
-    stream.getTracks().forEach(track => peerConnection.addTrack(track, stream));
+    //stream.getTracks().forEach(track => pcs.addTrack(track, stream));
 
     connectSignServer();
 
-  });
+  //});
 }
 
 function negotiate(){
+  /*
 
   negotiateButton.disabled = true;
 
@@ -61,20 +64,22 @@ function negotiate(){
     console.log("%c>>>", 'color: red'," negotiating, sending offer:"); console.log(description);
     wss.send(JSON.stringify({type:"offer", data:description, to:remoteID, from:localID}));
   });
+  */
 }
-
 function hangup(){
+  /*
 
-  console.log("Ending negotiate");
+  console.log("Hanging up");
 
   peerConnection.close();
-  wss.close();
   peerConnection = null;
 
-  hangupButton.disabled = true;
-  startButton.disabled = false;
-}
+  remoteID = 0;
 
+  hangupButton.disabled = true;
+  negotiateButton.disabled = false;
+  */
+}
 
 function connectSignServer(){
 
@@ -87,7 +92,7 @@ function connectSignServer(){
     var data = JSON.parse(msg.data);
 
     console.log("------------------------------------------");
-    console.log("%c<<< ", 'color: green', "Type:"+data.type+" from:"+data.from+" to:"+data.to);
+    console.log("%c<<< ", 'color: green', "Type:"+data.type+" index:"+data.index+" from:"+data.from+" to:"+data.to);
 
     if(data.type=="txt") console.log(data.data);
     else if(data.type=="id"){
@@ -115,61 +120,81 @@ function connectSignServer(){
       console.log("vvv Disconnected "+data.data.id+" = "+data.data.ip);
     }else if(data.type=="offer"){
 
-      console.log('<<< OFFER received:'); console.log(data.data);
-      peerConnection.setRemoteDescription(new RTCSessionDescription(data.data));
+      console.log('<<< OFFER '+data.index+' received:'); console.log(data.data);
 
-      peerConnection.createAnswer().then(function(description){
+      createPeerConnection(data.index);
 
-        peerConnection.setLocalDescription(description);
+      pcs[data.index].setRemoteDescription(new RTCSessionDescription(data.data));
 
-        console.log('%c>>>', 'color: red','Sending answer:'); console.log(description);
-        wss.send(JSON.stringify({type:"answer", data:description, to:remoteID, from:localID}));
+      pcs[data.index].createAnswer().then(function(description){
+
+        pcs[data.index].setLocalDescription(description);
+
+        console.log('%c>>>', 'color: red','Sending answer '+data.index+':'); console.log(description);
+        wss.send(JSON.stringify({type:"answer", index:data.index, data:description, to:remoteID, from:localID}));
       });
 
     }else if(data.type=="answer"){
 
-      console.log("<<< ANSWER received:"); console.log(data.data);
+      //console.log("<<< ANSWER received:"); console.log(data.data);
 
-      peerConnection.setRemoteDescription(new RTCSessionDescription(data.data));
+      //peerConnection.setRemoteDescription(new RTCSessionDescription(data.data));
 
     }else if(data.type=="candidate"){
 
       console.log(data.data);
 
-      peerConnection.addIceCandidate(new RTCIceCandidate(data.data));
+      pcs[data.index].addIceCandidate(new RTCIceCandidate(data.data));
 
     }else{ console.log("Type ERROR: "); console.log(data); } 
+
+
+  wss.onclose = function(){
+
+    document.getElementById("id").innerHTML = "ID: undefined";
+    localID = undefined;
+    remoteID = 0;
+
+    startButton.disabled = false;
+    negotiateButton.disabled = true;
+    hangupButton.disabled = true;
+
+    wss.close();
+
+    console.log("Sign server disconnected!");
+  }
 
   }
 }
 
-function createPeerConnection(){
+function createPeerConnection(index){
 
-  console.log('Creating peer connection');
-  peerConnection = new RTCPeerConnection();
+  console.log('Creating peer connection '+index);
+  pcs[index] = new RTCPeerConnection();
 
 
-  peerConnection.onicecandidate = function(ev){
+  pcs[index].onicecandidate = function(ev){
 
     if (ev.candidate){
 
-      console.log("Sending candidate:"); console.log(ev.candidate);
+      console.log("Sending candidate: "+index); console.log(ev.candidate);
 
-      wss.send(JSON.stringify({type:"candidate", data:ev.candidate, to:remoteID, from: localID}));
+      wss.send(JSON.stringify({type:"candidate", index:index, data:ev.candidate, to:remoteID, from: localID}));
     }
   }
 
-  //peerConnection.onnegotiationneeded = negotiate;
+  //pcs[index].onnegotiationneeded = negotiate;
 
-  peerConnection.ontrack = function(ev){
+  pcs[index].ontrack = function(ev){
 
-    remoteVideo.srcObject = ev.streams[0];
+    remoteVideos[index].srcObject = ev.streams[0];
     
 
     negotiateButton.disabled = true;
     hangupButton.disabled = false;
   }
 }
+
 
 
 /////////// Send text //////////////////////////////////
