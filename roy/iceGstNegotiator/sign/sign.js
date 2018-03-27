@@ -110,7 +110,7 @@ wss.on('connection', function(socket, req) {
 
   socket.on('close', function(){
 
-    savedIDs.push(id);
+    if(id >= 1) savedIDs.push(id);
 
     delete sockets[id];
 

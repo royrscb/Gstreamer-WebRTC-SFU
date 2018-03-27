@@ -173,7 +173,7 @@ static void on_answer_created(GstPromise * promise, gpointer user_data){
 }
 
 
-static void on_negotiation_needed(GstElement * wrbin, gpointer user_data){
+static void negotiate(GstElement * wrbin, gpointer user_data){
 
   GstPromise *promise;
 
@@ -200,7 +200,7 @@ static void start_pipeline(){
 
 
   //This is the gstwebrtc entry point where we create the offer and so on. It will be called when the pipeline goes to PLAYING.
-  g_signal_connect(webrtc1, "on-negotiation-needed", G_CALLBACK (on_negotiation_needed), NULL);
+  //***g_signal_connect(webrtc1, "on-negotiation-needed", G_CALLBACK (negotiate), NULL);
   g_signal_connect(webrtc1, "on-ice-candidate", G_CALLBACK (send_ice_candidate), NULL);
   /* Incoming streams will be exposed via this signal */
   g_signal_connect(webrtc1, "pad-added", G_CALLBACK (_webrtc_pad_added), pipe1);
@@ -247,7 +247,7 @@ static void on_sign_message(SoupWebsocketConnection *ws_conn, SoupWebsocketDataT
     g_print("^^^ New conected %i = %s\n",id,ip);
 
     remoteIDtmp = id;
-    start_pipeline();
+    negotiate(webrtc1,NULL);
 
   }else if(g_strcmp0(type, "socketOFF")==0){
 
@@ -259,27 +259,28 @@ static void on_sign_message(SoupWebsocketConnection *ws_conn, SoupWebsocketDataT
 
   }else if(g_strcmp0(type, "offer")==0){
 
+    remoteIDtmp=from;
 
     JsonObject *of = json_object_get_object_member(data, "data");
     const gchar *sdpText = json_object_get_string_member(of, "sdp");
 
     g_print("OFFER received: %s\n", json_stringify(of));
-    /*
-        GstSDPMessage *sdp;
-        gst_sdp_message_new(&sdp);
-        gst_sdp_message_parse_buffer(sdpText, strlen(sdpText), sdp);
+    
+    GstSDPMessage *sdp;
+    gst_sdp_message_new(&sdp);
+    gst_sdp_message_parse_buffer(sdpText, strlen(sdpText), sdp);
 
-        GstWebRTCSessionDescription *offer;
-        offer = gst_webrtc_session_description_new(GST_WEBRTC_SDP_TYPE_OFFER, sdp);
-        g_signal_emit_by_name (webrtc1, "set-remote-description", offer, NULL);
+    GstWebRTCSessionDescription *offer;
+    offer = gst_webrtc_session_description_new(GST_WEBRTC_SDP_TYPE_OFFER, sdp);
+    g_signal_emit_by_name (webrtc1, "set-remote-description", offer, NULL);
 
+    
+    //creating the answer
+    GstPromise *promise;
+  
+    promise = gst_promise_new_with_change_func(on_answer_created, user_data, NULL);
+    g_signal_emit_by_name (webrtc1, "create-answer", NULL, promise);
         
-        //creating the answer
-        GstPromise *promise;
-      
-        promise = gst_promise_new_with_change_func(on_answer_created, user_data, NULL);
-        g_signal_emit_by_name (webrtc1, "create-answer", NULL, promise);
-    */    
   }else if(g_strcmp0(type, "answer")==0){
 
     JsonObject *ans = json_object_get_object_member(data, "data");
@@ -352,18 +353,19 @@ int main(int argc, char *argv[]){
   gst_init (&argc, &argv);
   g_print("Gst Server running\n");
 
-  loop = g_main_loop_new (NULL, FALSE);
+  
+  start_pipeline();
 
   connect_webSocket_signServer();
 
+  loop = g_main_loop_new (NULL, FALSE);
   g_main_loop_run (loop);
 
 
 
 
 
-
-
+  //exit functions
 
   g_object_unref(ws_conn);
   g_main_loop_unref(loop);

@@ -4,11 +4,11 @@ var localVideo = document.getElementById("localVideo");
 var remoteVideo = document.getElementById("remoteVideo");
 
 var startButton = document.getElementById("startButton");
-var callButton = document.getElementById("callButton");
+var negotiateButton = document.getElementById("negotiateButton");
 var hangupButton = document.getElementById("hangupButton");
 
 startButton.onclick = start;
-callButton.onclick = call;
+negotiateButton.onclick = negotiate;
 hangupButton.onclick = hangup;
 
 
@@ -49,23 +49,23 @@ function start() {
   });
 }
 
-function call(){
+function negotiate(){
 
-  callButton.disabled = true;
+  negotiateButton.disabled = true;
 
   peerConnection.createOffer().then(function(description){
 
     console.log('Setting local description');
     peerConnection.setLocalDescription(description);
 
-    console.log("%c>>>", 'color: red'," Calling, sending offer:"); console.log(description);
+    console.log("%c>>>", 'color: red'," negotiating, sending offer:"); console.log(description);
     wss.send(JSON.stringify({type:"offer", data:description, to:remoteID, from:localID}));
   });
 }
 
 function hangup(){
 
-  console.log("Ending call");
+  console.log("Ending negotiate");
 
   peerConnection.close();
   wss.close();
@@ -100,12 +100,12 @@ function connectSignServer(){
     }else if(data.type=="gstServerON"){
 
       gstServerON = true;
-      callButton.disabled = false;
+      negotiateButton.disabled = false;
 
       console.log(data.data);
     }else if(data.type=="socketON"){
 
-      //callButton.disabled = false;
+      //negotiateButton.disabled = false;
       //if(data.from==-1) wss.send(JSON.stringify({type:"socketON",data:{id:localID},to:data.data.id}));//ultraMegaMasterPROVI
       //remoteID = data.data.id;
 
@@ -115,7 +115,7 @@ function connectSignServer(){
       console.log("vvv Disconnected "+data.data.id+" = "+data.data.ip);
     }else if(data.type=="offer"){
 
-      console.log('<<< Offer received:'); console.log(data.data);
+      console.log('<<< OFFER received:'); console.log(data.data);
       peerConnection.setRemoteDescription(new RTCSessionDescription(data.data));
 
       peerConnection.createAnswer().then(function(description){
@@ -128,13 +128,13 @@ function connectSignServer(){
 
     }else if(data.type=="answer"){
 
-      console.log("<<< Answer received:"); console.log(data.data);
+      console.log("<<< ANSWER received:"); console.log(data.data);
 
       peerConnection.setRemoteDescription(new RTCSessionDescription(data.data));
 
     }else if(data.type=="candidate"){
 
-      console.log("<<< Candidate received:"); console.log(data.data);
+      console.log(data.data);
 
       peerConnection.addIceCandidate(new RTCIceCandidate(data.data));
 
@@ -159,14 +159,14 @@ function createPeerConnection(){
     }
   }
 
-  //peerConnection.onnegotiationneeded = call;
+  //peerConnection.onnegotiationneeded = negotiate;
 
   peerConnection.ontrack = function(ev){
 
     remoteVideo.srcObject = ev.streams[0];
     
 
-    callButton.disabled = true;
+    negotiateButton.disabled = true;
     hangupButton.disabled = false;
   }
 }
