@@ -176,10 +176,7 @@ static void send_room_peer_msg (const gchar * text, const gchar * peer_id){
   g_free (msg);
 }
 
-static void
-send_ice_candidate_message (GstElement * webrtc G_GNUC_UNUSED, guint mlineindex,
-    gchar * candidate, const gchar * peer_id)
-{
+static void send_ice_candidate_message(GstElement *webrtc G_GNUC_UNUSED,guint mlineindex,gchar *candidate,const gchar *peer_id){
   gchar *text;
   JsonObject *ice, *msg;
 
@@ -266,8 +263,7 @@ on_negotiation_needed (GstElement * webrtc, const gchar * peer_id)
   GstPromise *promise;
 
   app_state = ROOM_CALL_OFFERING;
-  promise = gst_promise_new_with_change_func (
-      (GstPromiseChangeFunc) on_offer_created, (gpointer) peer_id, NULL);
+  promise = gst_promise_new_with_change_func((GstPromiseChangeFunc) on_offer_created, (gpointer) peer_id, NULL);
   g_signal_emit_by_name (webrtc, "create-offer", NULL, promise);
 }
 
@@ -662,7 +658,7 @@ static gboolean handle_peer_message (const gchar * peer_id, const gchar * msg){
       cleanup_and_quit_loop ("ERROR: invalid sdp_type", ROOM_CALL_ERROR);
       return FALSE;
     }
-  } else if (json_object_has_member (object, "ice")) {
+  } else if (json_object_has_member (object, "ice")){
     GstElement *webrtc;
     const gchar *candidate;
     gint sdpmlineindex;
@@ -674,8 +670,7 @@ static gboolean handle_peer_message (const gchar * peer_id, const gchar * msg){
     /* Add ice candidate sent by remote peer */
     webrtc = gst_bin_get_by_name (GST_BIN (pipeline), peer_id);
     g_assert_nonnull (webrtc);
-    g_signal_emit_by_name (webrtc, "add-ice-candidate", sdpmlineindex,
-        candidate);
+    g_signal_emit_by_name (webrtc, "add-ice-candidate", sdpmlineindex, candidate);
     gst_object_unref (webrtc);
   } else {
     g_printerr ("Ignoring unknown JSON message:\n%s\n", msg);
