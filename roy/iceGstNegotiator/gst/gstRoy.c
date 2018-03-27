@@ -293,7 +293,7 @@ static void on_sign_server_connected(GObject *object, GAsyncResult *result, gpoi
 
   ws_conn = soup_session_websocket_connect_finish(SOUP_SESSION(object), result, NULL);
   if (soup_websocket_connection_get_state (ws_conn) != SOUP_WEBSOCKET_STATE_OPEN) g_main_loop_quit(loop);
-  
+
   g_signal_connect(ws_conn, "message", G_CALLBACK(on_sign_message), NULL);
   g_signal_connect(ws_conn, "closed",  G_CALLBACK(on_sign_closed),  NULL); 
 

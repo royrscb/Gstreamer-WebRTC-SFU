@@ -320,23 +320,20 @@ static void add_peer_to_pipeline (const gchar * peer_id, gboolean offer){
   gst_bin_add_many (GST_BIN (pipeline), q, webrtc, NULL);
 
   srcpad = gst_element_get_static_pad (q, "src");
-  g_assert_nonnull (srcpad);
   sinkpad = gst_element_get_request_pad (webrtc, "sink_%u");
-  g_assert_nonnull (sinkpad);
   ret = gst_pad_link (srcpad, sinkpad);
-  g_assert_cmpint (ret, ==, GST_PAD_LINK_OK);
+
   gst_object_unref (srcpad);
   gst_object_unref (sinkpad);
 
+
   tee = gst_bin_get_by_name (GST_BIN (pipeline), "audiotee");
-  g_assert_nonnull (tee);
   srcpad = gst_element_get_request_pad (tee, "src_%u");
-  g_assert_nonnull (srcpad);
   gst_object_unref (tee);
   sinkpad = gst_element_get_static_pad (q, "sink");
-  g_assert_nonnull (sinkpad);
+
   ret = gst_pad_link (srcpad, sinkpad);
-  g_assert_cmpint (ret, ==, GST_PAD_LINK_OK);
+
   gst_object_unref (srcpad);
   gst_object_unref (sinkpad);
 
@@ -345,18 +342,14 @@ static void add_peer_to_pipeline (const gchar * peer_id, gboolean offer){
    * XXX: We must connect this after webrtcbin has been linked to a source via
    * get_request_pad() and before we go from NULL->READY otherwise webrtcbin
    * will create an SDP offer with no media lines in it. */
-  if (offer)
-    g_signal_connect (webrtc, "on-negotiation-needed",
-        G_CALLBACK (on_negotiation_needed), (gpointer) peer_id);
+  if (offer) g_signal_connect (webrtc, "on-negotiation-needed", G_CALLBACK (on_negotiation_needed), (gpointer) peer_id);
 
   /* We need to transmit this ICE candidate to the browser via the websockets
    * signalling server. Incoming ice candidates from the browser need to be
    * added by us too, see on_server_message() */
-  g_signal_connect (webrtc, "on-ice-candidate",
-      G_CALLBACK (send_ice_candidate_message), (gpointer) peer_id);
+  g_signal_connect (webrtc, "on-ice-candidate", G_CALLBACK (send_ice_candidate_message), (gpointer) peer_id);
   /* Incoming streams will be exposed via this signal */
-  g_signal_connect (webrtc, "pad-added", G_CALLBACK (on_incoming_stream),
-      pipeline);
+  g_signal_connect (webrtc, "pad-added", G_CALLBACK (on_incoming_stream), pipeline);
 
   /* Set to pipeline branch to PLAYING */
   ret = gst_element_sync_state_with_parent (q);
@@ -365,17 +358,6 @@ static void add_peer_to_pipeline (const gchar * peer_id, gboolean offer){
   g_assert_true (ret);
 }
 
-static void
-call_peer (const gchar * peer_id)
-{
-  add_peer_to_pipeline (peer_id, TRUE);
-}
-
-static void
-incoming_call_from_peer (const gchar * peer_id)
-{
-  add_peer_to_pipeline (peer_id, FALSE);
-}
 
 #define STR(x) #x
 #define RTP_CAPS_OPUS(x) "application/x-rtp,media=audio,encoding-name=OPUS,payload=" STR(x)
@@ -444,15 +426,13 @@ static gboolean register_with_server (void){
   return TRUE;
 }
 
-static void
-on_server_closed (SoupWebsocketConnection * conn G_GNUC_UNUSED,
-    gpointer user_data G_GNUC_UNUSED)
-{
+static void on_server_closed (SoupWebsocketConnection * conn G_GNUC_UNUSED, gpointer user_data G_GNUC_UNUSED){
+
   app_state = SERVER_CLOSED;
   cleanup_and_quit_loop ("Server connection closed", 0);
 }
 
-static gboolean do_registration (void){
+static gboolean do_registration(void){
 
   if (app_state != SERVER_REGISTERING) {
     cleanup_and_quit_loop ("ERROR: Received HELLO when not registering", APP_STATE_ERROR);
@@ -472,9 +452,8 @@ static gboolean do_registration (void){
  * When we join a room, we are responsible for calling by starting negotiation
  * with each peer in it by sending an SDP offer and ICE candidates.
  */
-static void
-do_join_room (const gchar * text)
-{
+static void do_join_room (const gchar * text){
+
   gint ii, len;
   gchar **peer_ids;
 
@@ -504,7 +483,7 @@ do_join_room (const gchar * text)
       gchar *peer_id = g_strdup (peer_ids[ii]);
       g_print ("Negotiating with peer %s\n", peer_id);
       /* This might fail asynchronously */
-      call_peer (peer_id);
+      add_peer_to_pipeline (peer_id, TRUE); //call peer
       peers = g_list_prepend (peers, peer_id);
     }
   }
@@ -513,9 +492,8 @@ do_join_room (const gchar * text)
   return;
 }
 
-static void
-handle_error_message (const gchar * msg)
-{
+static void handle_error_message (const gchar * msg){
+
   switch (app_state) {
     case SERVER_CONNECTING:
       app_state = SERVER_CONNECTION_ERROR;
@@ -572,9 +550,8 @@ on_answer_created (GstPromise * promise, const gchar * peer_id)
   app_state = ROOM_CALL_STARTED;
 }
 
-static void
-handle_sdp_offer (const gchar * peer_id, const gchar * text)
-{
+static void handle_sdp_offer (const gchar * peer_id, const gchar * text){
+
   int ret;
   GstPromise *promise;
   GstElement *webrtc;
@@ -612,9 +589,8 @@ handle_sdp_offer (const gchar * peer_id, const gchar * text)
   gst_object_unref (webrtc);
 }
 
-static void
-handle_sdp_answer (const gchar * peer_id, const gchar * text)
-{
+static void handle_sdp_answer (const gchar * peer_id, const gchar * text){
+
   int ret;
   GstPromise *promise;
   GstElement *webrtc;
@@ -671,18 +647,12 @@ static gboolean handle_peer_message (const gchar * peer_id, const gchar * msg){
 
     child = json_object_get_object_member (object, "sdp");
 
-    if (!json_object_has_member (child, "type")) {
-      cleanup_and_quit_loop ("ERROR: received SDP without 'type'",
-          ROOM_CALL_ERROR);
-      return FALSE;
-    }
-
     sdp_type = json_object_get_string_member (child, "type");
     text = json_object_get_string_member (child, "sdp");
 
     if (g_strcmp0 (sdp_type, "offer") == 0) {
       app_state = ROOM_CALL_ANSWERING;
-      incoming_call_from_peer (peer_id);
+      add_peer_to_pipeline (peer_id, FALSE);
       handle_sdp_offer (peer_id, text);
     } else if (g_strcmp0 (sdp_type, "answer") == 0) {
       g_assert_cmpint (app_state, >=, ROOM_CALL_OFFERING);
@@ -848,9 +818,8 @@ static void connect_to_websocket_server_async (void){
   app_state = SERVER_CONNECTING;
 }
 
-int
-main (int argc, char *argv[])
-{
+int main (int argc, char *argv[]){
+
   GOptionContext *context;
   GError *error = NULL;
 
