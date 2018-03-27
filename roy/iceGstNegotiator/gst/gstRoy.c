@@ -259,26 +259,27 @@ static void on_sign_message(SoupWebsocketConnection *ws_conn, SoupWebsocketDataT
 
   }else if(g_strcmp0(type, "offer")==0){
 
+
     JsonObject *of = json_object_get_object_member(data, "data");
     const gchar *sdpText = json_object_get_string_member(of, "sdp");
 
     g_print("OFFER received: %s\n", json_stringify(of));
+    /*
+        GstSDPMessage *sdp;
+        gst_sdp_message_new(&sdp);
+        gst_sdp_message_parse_buffer(sdpText, strlen(sdpText), sdp);
 
-    GstSDPMessage *sdp;
-    gst_sdp_message_new(&sdp);
-    gst_sdp_message_parse_buffer(sdpText, strlen(sdpText), sdp);
+        GstWebRTCSessionDescription *offer;
+        offer = gst_webrtc_session_description_new(GST_WEBRTC_SDP_TYPE_OFFER, sdp);
+        g_signal_emit_by_name (webrtc1, "set-remote-description", offer, NULL);
 
-    GstWebRTCSessionDescription *offer;
-    offer = gst_webrtc_session_description_new(GST_WEBRTC_SDP_TYPE_OFFER, sdp);
-    g_signal_emit_by_name (webrtc1, "set-remote-description", offer, NULL);
-
-    
-    //creating the answer
-    GstPromise *promise;
-  
-    promise = gst_promise_new_with_change_func(on_answer_created, user_data, NULL);
-    g_signal_emit_by_name (webrtc1, "create-answer", NULL, promise);
-    
+        
+        //creating the answer
+        GstPromise *promise;
+      
+        promise = gst_promise_new_with_change_func(on_answer_created, user_data, NULL);
+        g_signal_emit_by_name (webrtc1, "create-answer", NULL, promise);
+    */    
   }else if(g_strcmp0(type, "answer")==0){
 
     JsonObject *ans = json_object_get_object_member(data, "data");

@@ -93,6 +93,7 @@ function connectSignServer(){
     else if(data.type=="id"){
 
       localID = data.data;
+      document.getElementById("id").innerHTML = "ID: "+localID;
 
       console.log('%c My id is:'+localID+' ', 'background: black; color: white');
 

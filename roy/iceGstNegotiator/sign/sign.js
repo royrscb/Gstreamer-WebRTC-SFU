@@ -21,7 +21,7 @@ const port = 3434;
 
 
 ////////////// VARS //////////////////////////////////////////////////////
-var sockets = []; 
+var sockets = [], savedIDs = []; 
 var ids=1; //sockets ids starts at 1
 
 
@@ -77,15 +77,16 @@ wss.on('connection', function(socket, req) {
     wss.broadcast("))) Gst server active!", "gstServerON", GST_SERVER_ID); 
   }else{
 
-    id = ids; ids++;
+    id = newID();
     sockets[id]={socket:socket, ip:ip, id:id};
 
     console.log  ("^^^ New conected "+id+" = "+ip); 
-    wss.broadcast({id:id,ip:ip},"socketON", id); 
 
     console.log(">>> Type:id from:-1 to:"+id+" data: "+id);
     socket.send(JSON.stringify({type:"id", data:id, from: SIGNALLING_SERVER_ID, to:id}));
     if(sockets[GST_SERVER_ID]!=undefined) socket.send(JSON.stringify({type:"gstServerON", data:"Gst server active!", from: SIGNALLING_SERVER_ID, to:id}));
+  
+    wss.broadcast({id:id,ip:ip},"socketON", id); 
   }
 
   socket.on('message', function(msg) {
@@ -108,6 +109,8 @@ wss.on('connection', function(socket, req) {
 
 
   socket.on('close', function(){
+
+    savedIDs.push(id);
 
     delete sockets[id];
 
@@ -132,3 +135,18 @@ wss.broadcast = function(msg, type = "txt", exception = null, from=SIGNALLING_SE
   });
   process.stdout.write("))) Broadcast: "); console.log(msg); console.log("");
 };
+
+
+function newID(){
+
+  var ret;
+
+  if(savedIDs.length > 0) ret = savedIDs.shift();
+  else {
+
+    ret = ids;
+    ids++;
+  }
+
+  return ret;
+}
