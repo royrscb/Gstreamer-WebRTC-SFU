@@ -292,7 +292,8 @@ static void on_sign_closed (SoupWebsocketConnection *ws_conn, gpointer user_data
 static void on_sign_server_connected(GObject *object, GAsyncResult *result, gpointer user_data){
 
   ws_conn = soup_session_websocket_connect_finish(SOUP_SESSION(object), result, NULL);
-
+  if (soup_websocket_connection_get_state (ws_conn) != SOUP_WEBSOCKET_STATE_OPEN) g_main_loop_quit(loop);
+  
   g_signal_connect(ws_conn, "message", G_CALLBACK(on_sign_message), NULL);
   g_signal_connect(ws_conn, "closed",  G_CALLBACK(on_sign_closed),  NULL); 
 
@@ -326,7 +327,7 @@ static void start_pipeline(){
   GError *error = NULL;
 
   pipe1 = gst_parse_launch ("webrtcbin name=sendrecv "
-    "videotestsrc ! queue ! "VIDEO_COD" ! sendrecv.sink_0 "
+    "videotestsrc ! queue ! "VIDEO_COD" ! sendrecv. "
     , &error);
 
   if (error) { g_printerr("Failed to parse launch: %s\n", error->message); g_error_free(error); if(pipe1)g_clear_object (&pipe1);}
