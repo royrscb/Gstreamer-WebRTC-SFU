@@ -175,7 +175,7 @@ static void on_answer_created(GstPromise * promise, gpointer wrbin){
   gst_webrtc_session_description_free(answer);
 }
 
-
+ 
 static void negotiate(GstElement * wrbin,const gint *index){
   g_print("Negotiate for %i\n", *index);
   GstPromise *promise;
