@@ -34,21 +34,21 @@ function start() {
 
   startButton.disabled = true;
   
-  //createPeerConnection();
+  createPeerConnection(0);
 
-  //var constraints = {video: false, audio: false};
+  var constraints = {video: true, audio: false};
 
   // Add local stream
-  //navigator.mediaDevices.getUserMedia(constraints).then(function(stream){ 
+  navigator.mediaDevices.getUserMedia(constraints).then(function(stream){ 
 
-    //console.log("Requesting local media");
-    //localStream = stream;
+    console.log("Requesting local media");
+    localStream = stream;
 
-    //stream.getTracks().forEach(track => pcs.addTrack(track, stream));
+    stream.getTracks().forEach(track => pcs[0].addTrack(track, stream));
 
     connectSignServer();
 
-  //});
+  });
 }
 
 function negotiate(){
@@ -122,7 +122,7 @@ function connectSignServer(){
 
       console.log('<<< OFFER '+data.index+' received:'); console.log(data.data);
 
-      createPeerConnection(data.index);
+      if(data.index > 0) createPeerConnection(data.index);
 
       pcs[data.index].setRemoteDescription(new RTCSessionDescription(data.data));
 
