@@ -144,7 +144,7 @@ function newID(){
   if(savedIDs.length > 0){
 
     ret = Math.min.apply(null, savedIDs);
-    savedIDs.filter(e => e != ret);
+    savedIDs = savedIDs.filter(e => e != ret);
 
   }else {
 

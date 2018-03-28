@@ -34,6 +34,7 @@ typedef struct UserData{
 } userData;
 
 userData usDa1, usDa2, usDaReal;
+GstPad *pad2add;
 
 
 
@@ -90,26 +91,6 @@ void send_data_to(gchar *type,const gint index, JsonObject *dataData, gint to){
   g_print(">>> Type:%s index:%i to:%i data: \n%s\n",type, index, to, json_stringify(dataData));
 }
 
-
-////////// PADS ////////////////////////////////////////////////////////////////////
-
-static void _webrtc_pad_added(GstElement * webrtc, GstPad * new_pad, GstElement * pipe){
-
-  g_print("Pad addedddddd\n");
-
-  GstElement *out;
-  GstPad *sink;
-
-  if (GST_PAD_DIRECTION (new_pad) != GST_PAD_SRC) return;
-
-  out = gst_parse_bin_from_description ("rtpvp8depay ! vp8dec ! videoconvert ! queue ! xvimagesink", TRUE, NULL);
-  gst_bin_add (GST_BIN (pipe), out);
-  gst_element_sync_state_with_parent (out);
-
-  sink = out->sinkpads->data;
-
-  gst_pad_link (new_pad, sink);
-}
 
 ///////////// Negotiation ///////////////////////////////////////////////////////////////////////
 
@@ -192,6 +173,82 @@ static void negotiate(userData *usDa){
   promise = gst_promise_new_with_change_func((GstPromiseChangeFunc) on_offer_created,usDa, NULL);
   g_signal_emit_by_name (usDa->wrbin, "create-offer", NULL, promise);
 }
+
+
+
+////////// PADS ////////////////////////////////////////////////////////////////////
+
+static void _final_pad(GstElement *webrtc, GstPad *new_pad, userData *usDa){
+
+  g_print("final padd adeddddddddddddddkdkdkddk\n");
+
+  GstElement *out;
+  GstPad *sink;
+
+  if (GST_PAD_DIRECTION (new_pad) != GST_PAD_SRC) return;
+
+  out = gst_parse_bin_from_description ("rtpvp8depay ! vp8dec ! videoconvert ! queue ! xvimagesink", TRUE, NULL);
+  gst_bin_add (GST_BIN (pipe1), out);
+  gst_element_sync_state_with_parent (out);
+
+  sink = out->sinkpads->data;
+
+  gst_pad_link (new_pad, sink);
+
+}
+
+
+
+static void _webrtc_pad_added(GstElement *webrtc, GstPad *new_pad, userData *usDa){
+
+  g_print("Pad addedddddd: %i\n", usDa->to);
+
+
+  if(usDa->to == 2){
+
+
+    if (GST_PAD_DIRECTION (new_pad) != GST_PAD_SRC) return;
+    else pad2add = new_pad;
+
+    usDaReal.to = 1;
+    usDaReal.index = 1;
+
+    usDaReal.wrbin = gst_element_factory_make ("webrtcbin", "wrRealBin");
+    gst_bin_add (GST_BIN (pipe1), usDaReal.wrbin);
+
+
+    GstPad *sinkpad = gst_element_get_request_pad (usDaReal.wrbin, "sink_%u");
+    gst_pad_link (new_pad, sinkpad);      gst_object_unref (sinkpad);
+
+
+    g_signal_connect(usDaReal.wrbin, "on-ice-candidate", G_CALLBACK (send_ice_candidate), &usDaReal);
+    //ell no menviara una puta merdaaa
+
+    
+    gst_element_sync_state_with_parent (usDaReal.wrbin);
+
+    negotiate(&usDaReal);
+
+  }
+
+
+
+  /*
+  GstElement *out;
+  GstPad *sink;
+
+  if (GST_PAD_DIRECTION (new_pad) != GST_PAD_SRC) return;
+
+  out = gst_parse_bin_from_description ("rtpvp8depay ! vp8dec ! videoconvert ! queue ! xvimagesink", TRUE, NULL);
+  gst_bin_add (GST_BIN (pipe1), out);
+  gst_element_sync_state_with_parent (out);
+
+  sink = out->sinkpads->data;
+
+  gst_pad_link (new_pad, sink);
+  */
+}
+
 
 /////// Signalling server connection ///////////////////////////////////////////////////////////
 
@@ -277,8 +334,13 @@ static void on_sign_message(SoupWebsocketConnection *ws_conn, SoupWebsocketDataT
 
     GstWebRTCSessionDescription *answer;
     answer = gst_webrtc_session_description_new(GST_WEBRTC_SDP_TYPE_ANSWER, sdp);
-    if(from==1) g_signal_emit_by_name (webrtc1, "set-remote-description", answer, NULL);
-    else if(from==2) g_signal_emit_by_name (webrtc2, "set-remote-description", answer, NULL);
+
+    if(from==1) {
+  
+      if(index==0) g_signal_emit_by_name (webrtc1, "set-remote-description", answer, NULL);
+      else if(index==1) g_signal_emit_by_name (usDaReal.wrbin, "set-remote-description", answer, NULL);
+
+    }else if(from==2) g_signal_emit_by_name (webrtc2, "set-remote-description", answer, NULL);
 
   }else if(g_strcmp0(type, "candidate")==0){
 
@@ -290,8 +352,12 @@ static void on_sign_message(SoupWebsocketConnection *ws_conn, SoupWebsocketDataT
     gint sdpMLineIndex = json_object_get_int_member(ice, "sdpMLineIndex");
 
     g_print("Candidate received: %s\n", json_stringify(ice));
-    if(from==1) g_signal_emit_by_name (webrtc1, "add-ice-candidate", sdpMLineIndex, candidate);
-    else if(from==2) g_signal_emit_by_name (webrtc2, "add-ice-candidate", sdpMLineIndex, candidate);
+    if(from==1) {
+
+      if(index == 0)  g_signal_emit_by_name (webrtc1, "add-ice-candidate", sdpMLineIndex, candidate);
+      else if(index == 1) g_signal_emit_by_name (usDaReal.wrbin, "add-ice-candidate", sdpMLineIndex, candidate);
+    
+    }else if(from==2) g_signal_emit_by_name (webrtc2, "add-ice-candidate", sdpMLineIndex, candidate);
 
   }else g_print("Unknown type! %s\n",msg);
 
@@ -360,8 +426,8 @@ static void start_pipeline(){
   g_signal_connect(webrtc1, "on-ice-candidate", G_CALLBACK (send_ice_candidate), &usDa1);
   g_signal_connect(webrtc2, "on-ice-candidate", G_CALLBACK (send_ice_candidate), &usDa2);
   /* Incoming streams will be exposed via this signal */
-  g_signal_connect(webrtc1, "pad-added", G_CALLBACK (_webrtc_pad_added), pipe1);
-  g_signal_connect(webrtc2, "pad-added", G_CALLBACK (_webrtc_pad_added), pipe1);
+  g_signal_connect(webrtc1, "pad-added", G_CALLBACK (_webrtc_pad_added), &usDa1);
+  g_signal_connect(webrtc2, "pad-added", G_CALLBACK (_webrtc_pad_added), &usDa2);
   /* Lifetime is the same as the pipeline itself */
   gst_object_unref(webrtc1);
   gst_object_unref(webrtc2);
