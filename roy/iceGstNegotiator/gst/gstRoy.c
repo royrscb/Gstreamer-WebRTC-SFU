@@ -16,16 +16,29 @@
 #include <string.h>
 
 
+
 //////// Variables ///////////////////////////////////////////////////////////////
 const char* url_sign_server = "wss://127.0.0.1:3434";
 
-
-static GstElement *pipe1, *webrtc1;
+const gint zero=0, uno=1;
+static GstElement *pipe1, *webrtc1, *webrtc2;
 static GMainLoop *loop = NULL;
 static SoupWebsocketConnection *ws_conn = NULL;
 
-static gint remoteIDtmp = 1;
 
+typedef struct UserData{
+
+  gint to;
+  gint index;
+
+  GstElement *wrbin;
+
+  gboolean ready;
+  
+} userData;
+
+userData usDa1, usDa2, usDaReal;
+GstPad *pad2add;
 
 
 
@@ -66,56 +79,40 @@ static JsonObject* json_parse(gchar *msg){
 }
 
 
-void send_data_to(gchar *type, JsonObject *dataData, gint to){
+void send_data_to(gchar *type,const gint index, JsonObject *dataData, gint to){
 
   JsonObject *data;
 
   data = json_object_new ();
   json_object_set_string_member (data, "type", type);
+  json_object_set_int_member (data, "index", index);
   json_object_set_object_member (data, "data", dataData);
   json_object_set_int_member (data, "from", 0);
   json_object_set_int_member (data, "to", to);
 
   soup_websocket_connection_send_text(ws_conn, json_stringify(data));
 
-  g_print(">>> Type:%s to:%i data: \n%s\n",type, to, json_stringify(dataData));
+  g_print(">>> Type:%s index:%i to:%i data: \n%s\n",type, index, to, json_stringify(dataData));
 }
 
-
-////////// PADS ////////////////////////////////////////////////////////////////////
-
-static void _webrtc_pad_added(GstElement * webrtc, GstPad * new_pad, GstElement * pipe){
-
-  g_print("Pad addedddddd\n");
-
-  GstElement *out;
-  GstPad *sink;
-
-  if (GST_PAD_DIRECTION (new_pad) != GST_PAD_SRC) return;
-
-  out = gst_parse_bin_from_description ("rtpvp8depay ! vp8dec ! videoconvert ! queue ! xvimagesink", TRUE, NULL);
-  gst_bin_add (GST_BIN (pipe), out);
-  gst_element_sync_state_with_parent (out);
-
-  sink = out->sinkpads->data;
-
-  gst_pad_link (new_pad, sink);
-}
 
 ///////////// Negotiation ///////////////////////////////////////////////////////////////////////
 
-static void send_ice_candidate(GstElement * webrtc G_GNUC_UNUSED, guint mlineindex, gchar * candidate, gpointer user_data G_GNUC_UNUSED){
+static void send_ice_candidate(GstElement * webrtc G_GNUC_UNUSED, guint mlineindex, gchar * candidate, userData *usDa){
+
+  g_print("Enviant candidat %i\n", usDa->index);
 
   JsonObject *ice = json_object_new ();
 
   json_object_set_string_member(ice, "candidate", candidate);
   json_object_set_int_member (ice, "sdpMLineIndex", mlineindex);
 
-  send_data_to("candidate", ice, remoteIDtmp);
+  send_data_to("candidate", usDa->index, ice, usDa->to);
 }
 
-static void on_offer_created(GstPromise * promise, gpointer user_data){
+static void on_offer_created(GstPromise * promise, userData *usDa){
 
+  g_print("Creating offer of index: %i\n", usDa->index);
   GstWebRTCSessionDescription *offer = NULL;
   const GstStructure *reply;
 
@@ -129,21 +126,20 @@ static void on_offer_created(GstPromise * promise, gpointer user_data){
   gchar *sdp = gst_sdp_message_as_text (offer->sdp);
   g_print ("Setting local desc(offer) and sending created offer:\n%s\n", sdp);
 
-  g_signal_emit_by_name (webrtc1, "set-local-description", offer, NULL);
-
+  g_signal_emit_by_name (usDa->wrbin, "set-local-description", offer, NULL);
 
   JsonObject *data = json_object_new();
   json_object_set_string_member(data, "type", "offer");
   json_object_set_string_member(data, "sdp", sdp);
   g_free(sdp);
 
-  send_data_to("offer", data, remoteIDtmp);
+  send_data_to("offer", usDa->index, data, usDa->to);
 
   json_object_unref(data);
   gst_webrtc_session_description_free (offer);
 }
 
-static void on_answer_created(GstPromise * promise, gpointer user_data){
+static void on_answer_created(GstPromise * promise, gpointer wrbin){
 
   GstWebRTCSessionDescription *answer = NULL;
   const GstStructure *reply;
@@ -158,7 +154,7 @@ static void on_answer_created(GstPromise * promise, gpointer user_data){
   gchar *sdp = gst_sdp_message_as_text(answer->sdp);
   g_print ("Setting local desc(answer) and sending created answer:\n%s\n", sdp);
 
-  g_signal_emit_by_name (webrtc1, "set-local-description", answer, NULL);
+  g_signal_emit_by_name (wrbin, "set-local-description", answer, NULL);
 
 
   JsonObject *data = json_object_new();
@@ -166,49 +162,85 @@ static void on_answer_created(GstPromise * promise, gpointer user_data){
   json_object_set_string_member(data, "sdp", sdp);
   g_free(sdp);
 
-  send_data_to("answer", data, remoteIDtmp);
+  send_data_to("answer", 99, data, 99);
 
   json_object_unref(data);
   gst_webrtc_session_description_free(answer);
 }
 
+ 
+static void negotiate(userData *usDa){
 
-static void negotiate(GstElement * wrbin, gpointer user_data){
+  if(usDa->ready){
 
-  GstPromise *promise;
+    g_print("Negotiate for %i to %i\n", usDa->index, usDa->to);
+    GstPromise *promise;
 
-  promise = gst_promise_new_with_change_func (on_offer_created, user_data, NULL);
-  g_signal_emit_by_name (wrbin, "create-offer", NULL, promise);
+    promise = gst_promise_new_with_change_func((GstPromiseChangeFunc) on_offer_created,usDa, NULL);
+    g_signal_emit_by_name (usDa->wrbin, "create-offer", NULL, promise);
+  }
 }
 
 
-/////// Pipeline ///////////
+
+////////// PADS ////////////////////////////////////////////////////////////////////
+
+static void play_from_pad(GstElement *webrtc, GstPad *new_pad, userData *usDa){
+
+  g_print("final padd adeddddddddddddddkdkdkddk\n");
+
+  GstElement *out;
+  GstPad *sink;
+
+  if (GST_PAD_DIRECTION (new_pad) != GST_PAD_SRC) return;
+
+  out = gst_parse_bin_from_description ("rtpvp8depay ! vp8dec ! videoconvert ! queue ! autodiveosink", TRUE, NULL);
+  gst_bin_add (GST_BIN (pipe1), out);
+  gst_element_sync_state_with_parent (out);
+
+  sink = out->sinkpads->data;
+
+  gst_pad_link (new_pad, sink);
+
+}
+
+
 #define VIDEO_COD "vp8enc ! rtpvp8pay ! queue ! application/x-rtp,media=video,payload=96,encoding-name=VP8"
 #define AUDIO_COD "opusenc ! rtpopuspay ! queue ! application/x-rtp,media=audio,payload=97,encoding-name=OPUS"
 
-static void start_pipeline(){
+static void _webrtc_pad_added(GstElement *webrtc, GstPad *new_pad, userData *usDa){
 
-  GError *error = NULL;
-
-  pipe1 = gst_parse_launch ("webrtcbin name=sendrecv "
-    "videotestsrc ! queue ! "VIDEO_COD" ! sendrecv.sink_0 "
-    , &error);
-
-  if (error) { g_printerr("Failed to parse launch: %s\n", error->message); g_error_free(error); if(pipe1)g_clear_object (&pipe1);}
-
-  webrtc1 = gst_bin_get_by_name (GST_BIN (pipe1), "sendrecv");
+  if(usDa->to == 1){ //if(usDa->to == 2){
 
 
-  //This is the gstwebrtc entry point where we create the offer and so on. It will be called when the pipeline goes to PLAYING.
-  //***g_signal_connect(webrtc1, "on-negotiation-needed", G_CALLBACK (negotiate), NULL);
-  g_signal_connect(webrtc1, "on-ice-candidate", G_CALLBACK (send_ice_candidate), NULL);
-  /* Incoming streams will be exposed via this signal */
-  g_signal_connect(webrtc1, "pad-added", G_CALLBACK (_webrtc_pad_added), pipe1);
-  /* Lifetime is the same as the pipeline itself */
-  gst_object_unref(webrtc1);
+    if (GST_PAD_DIRECTION (new_pad) != GST_PAD_SRC) return;
+    else pad2add = new_pad;
 
-  g_print ("Starting pipeline\n");
-  gst_element_set_state (GST_ELEMENT (pipe1), GST_STATE_PLAYING);
+    g_print("Pad addedddddd: %i\n", usDa->to);
+
+    usDaReal.to = 1;
+    usDaReal.index = 1;
+    usDaReal.ready = TRUE;
+
+
+    GstElement *out;
+    out=gst_parse_bin_from_description("rtpvp8depay ! vp8dec  ! queue ! "VIDEO_COD" ! webrtcbin name=wrRealBin", TRUE, NULL);
+    gst_bin_add(GST_BIN (pipe1), out);
+
+    GstPad *sink = out->sinkpads->data;
+
+    gst_pad_link (new_pad, sink);
+       
+
+    usDaReal.wrbin = gst_bin_get_by_name(GST_BIN (out), "wrRealBin");
+    g_signal_connect(usDaReal.wrbin, "on-ice-candidate", G_CALLBACK (send_ice_candidate), &usDaReal);
+    g_signal_connect(usDaReal.wrbin, "on-negotiation-needed", G_CALLBACK (negotiate), &usDaReal);
+
+
+    gst_element_sync_state_with_parent (out);
+    
+    negotiate(&usDaReal);
+  }
 }
 
 
@@ -246,8 +278,9 @@ static void on_sign_message(SoupWebsocketConnection *ws_conn, SoupWebsocketDataT
 
     g_print("^^^ New conected %i = %s\n",id,ip);
 
-    remoteIDtmp = id;
-    negotiate(webrtc1,NULL);
+    if(id==1) {usDa1.ready = TRUE; negotiate(&usDa1); }
+    else if(id==2) { usDa2.ready = TRUE; negotiate(&usDa2);}
+    else g_print("aqui als elses lioo xxxxxxxxxxxxxxxxxxxxxxxxxxx\n");
 
   }else if(g_strcmp0(type, "socketOFF")==0){
 
@@ -258,8 +291,6 @@ static void on_sign_message(SoupWebsocketConnection *ws_conn, SoupWebsocketDataT
     g_print("vvv Disconected %i = %s\n",id,ip);
 
   }else if(g_strcmp0(type, "offer")==0){
-
-    remoteIDtmp=from;
 
     JsonObject *of = json_object_get_object_member(data, "data");
     const gchar *sdpText = json_object_get_string_member(of, "sdp");
@@ -283,6 +314,8 @@ static void on_sign_message(SoupWebsocketConnection *ws_conn, SoupWebsocketDataT
         
   }else if(g_strcmp0(type, "answer")==0){
 
+    const gint index = json_object_get_int_member(data,"index");
+
     JsonObject *ans = json_object_get_object_member(data, "data");
     const gchar *sdpText = json_object_get_string_member(ans, "sdp");
 
@@ -295,9 +328,17 @@ static void on_sign_message(SoupWebsocketConnection *ws_conn, SoupWebsocketDataT
 
     GstWebRTCSessionDescription *answer;
     answer = gst_webrtc_session_description_new(GST_WEBRTC_SDP_TYPE_ANSWER, sdp);
-    g_signal_emit_by_name (webrtc1, "set-remote-description", answer, NULL);
+
+    if(from==1) {
+  
+      if(index==0) g_signal_emit_by_name (webrtc1, "set-remote-description", answer, NULL);
+      else if(index==1) g_signal_emit_by_name (usDaReal.wrbin, "set-remote-description", answer, NULL);
+
+    }else if(from==2) g_signal_emit_by_name (webrtc2, "set-remote-description", answer, NULL);
 
   }else if(g_strcmp0(type, "candidate")==0){
+
+    const gint index = json_object_get_int_member(data,"index");
 
     JsonObject *ice = json_object_get_object_member(data, "data");
     const gchar *candidate = json_object_get_string_member(ice, "candidate");
@@ -305,7 +346,12 @@ static void on_sign_message(SoupWebsocketConnection *ws_conn, SoupWebsocketDataT
     gint sdpMLineIndex = json_object_get_int_member(ice, "sdpMLineIndex");
 
     g_print("Candidate received: %s\n", json_stringify(ice));
-    g_signal_emit_by_name (webrtc1, "add-ice-candidate", sdpMLineIndex, candidate);
+    if(from==1) {
+
+      if(index == 0)  g_signal_emit_by_name (webrtc1, "add-ice-candidate", sdpMLineIndex, candidate);
+      else if(index == 1) g_signal_emit_by_name (usDaReal.wrbin, "add-ice-candidate", sdpMLineIndex, candidate);
+    
+    }else if(from==2) g_signal_emit_by_name (webrtc2, "add-ice-candidate", sdpMLineIndex, candidate);
 
   }else g_print("Unknown type! %s\n",msg);
 
@@ -323,6 +369,7 @@ static void on_sign_closed (SoupWebsocketConnection *ws_conn, gpointer user_data
 static void on_sign_server_connected(GObject *object, GAsyncResult *result, gpointer user_data){
 
   ws_conn = soup_session_websocket_connect_finish(SOUP_SESSION(object), result, NULL);
+  if (soup_websocket_connection_get_state (ws_conn) != SOUP_WEBSOCKET_STATE_OPEN) g_main_loop_quit(loop);
 
   g_signal_connect(ws_conn, "message", G_CALLBACK(on_sign_message), NULL);
   g_signal_connect(ws_conn, "closed",  G_CALLBACK(on_sign_closed),  NULL); 
@@ -348,7 +395,46 @@ static void connect_webSocket_signServer(){
   soup_session_websocket_connect_async(session, msg, "gstServer", (char **)NULL, NULL, on_sign_server_connected, NULL);
 }
 
+/////// Pipeline ///////////
+
+static void start_pipeline(){
+
+  GError *error = NULL;
+
+  pipe1 = gst_parse_launch ("webrtcbin name=smpte webrtcbin name=ball "
+    "videotestsrc pattern=smpte ! queue ! "VIDEO_COD" ! smpte. "
+    "videotestsrc pattern=ball ! queue ! "VIDEO_COD" ! ball."
+    , &error);
+
+  if (error) { g_printerr("Failed to parse launch: %s\n", error->message); g_error_free(error); if(pipe1)g_clear_object (&pipe1);}
+
+  webrtc1 = gst_bin_get_by_name(GST_BIN (pipe1), "smpte");
+  webrtc2 = gst_bin_get_by_name(GST_BIN (pipe1), "ball");
+  usDa1.wrbin = webrtc1;
+  usDa2.wrbin = webrtc2;
+
+  //This is the gstwebrtc entry point where we create the offer and so on. It will be called when the pipeline goes to PLAYING.
+  g_signal_connect(webrtc1, "on-negotiation-needed", G_CALLBACK (negotiate), &usDa1);
+  g_signal_connect(webrtc1, "on-negotiation-needed", G_CALLBACK (negotiate), &usDa2);
+
+  g_signal_connect(webrtc1, "on-ice-candidate", G_CALLBACK (send_ice_candidate), &usDa1);
+  g_signal_connect(webrtc2, "on-ice-candidate", G_CALLBACK (send_ice_candidate), &usDa2);
+  /* Incoming streams will be exposed via this signal */
+  g_signal_connect(webrtc1, "pad-added", G_CALLBACK (_webrtc_pad_added), &usDa1);
+  g_signal_connect(webrtc2, "pad-added", G_CALLBACK (_webrtc_pad_added), &usDa2);
+  /* Lifetime is the same as the pipeline itself */
+  gst_object_unref(webrtc1);
+  gst_object_unref(webrtc2);
+
+  g_print ("Starting pipeline\n");
+  gst_element_set_state (GST_ELEMENT (pipe1), GST_STATE_PLAYING);
+}
+
+
 int main(int argc, char *argv[]){
+
+  usDa1.to = 1; usDa1.index = 0; usDa1.ready = FALSE;
+  usDa2.to = 2; usDa2.index = 0; usDa2.ready = FALSE;
 
   gst_init (&argc, &argv);
   g_print("Gst Server running\n");

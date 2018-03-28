@@ -99,7 +99,7 @@ wss.on('connection', function(socket, req) {
 
 
     console.log("----------------------------------------------------------------");
-    console.log("Message type:"+data.type+" from:"+data.from+" to:"+data.to); console.log(data.data);
+    console.log("Message type:"+data.type+" index:"+data.index+" from:"+data.from+" to:"+data.to); console.log(data.data);
 
     if(data.to>=0 && sockets[data.to]!=undefined) sockets[data.to].socket.send(msg);
     else if(data.to==SIGNALLING_SERVER_ID);
@@ -142,8 +142,12 @@ function newID(){
 
   var ret;
 
-  if(savedIDs.length > 0) ret = savedIDs.shift();
-  else {
+  if(savedIDs.length > 0){
+
+    ret = Math.min.apply(null, savedIDs);
+    savedIDs = savedIDs.filter(e => e != ret);
+
+  }else {
 
     ret = ids;
     ids++;
