@@ -24,8 +24,16 @@ static GstElement *pipe1, *webrtc1, *webrtc2;
 static GMainLoop *loop = NULL;
 static SoupWebsocketConnection *ws_conn = NULL;
 
-static gint remoteIDtmp = 1;
 
+typedef struct UserData{
+
+  gint to;
+  gint index;
+  GstElement *wrbin;
+  
+} userData;
+
+userData usDa1, usDa2, usDaReal;
 
 
 
@@ -105,20 +113,21 @@ static void _webrtc_pad_added(GstElement * webrtc, GstPad * new_pad, GstElement 
 
 ///////////// Negotiation ///////////////////////////////////////////////////////////////////////
 
-static void send_ice_candidate(GstElement * webrtc G_GNUC_UNUSED, guint mlineindex, gchar * candidate, const gint *index){
+static void send_ice_candidate(GstElement * webrtc G_GNUC_UNUSED, guint mlineindex, gchar * candidate, userData *usDa){
 
-  g_print("Enviant candidat %i\n", *index);
+  g_print("Enviant candidat %i\n", usDa->index);
 
   JsonObject *ice = json_object_new ();
 
   json_object_set_string_member(ice, "candidate", candidate);
   json_object_set_int_member (ice, "sdpMLineIndex", mlineindex);
 
-  send_data_to("candidate", *index, ice, remoteIDtmp);
+  send_data_to("candidate", usDa->index, ice, usDa->to);
 }
 
-static void on_offer_created(GstPromise * promise, gint *index){
-  g_print("Creating offer of index: %i\n", *index);
+static void on_offer_created(GstPromise * promise, userData *usDa){
+
+  g_print("Creating offer of index: %i\n", usDa->index);
   GstWebRTCSessionDescription *offer = NULL;
   const GstStructure *reply;
 
@@ -132,15 +141,14 @@ static void on_offer_created(GstPromise * promise, gint *index){
   gchar *sdp = gst_sdp_message_as_text (offer->sdp);
   g_print ("Setting local desc(offer) and sending created offer:\n%s\n", sdp);
 
-  if(*index==0) g_signal_emit_by_name (webrtc1, "set-local-description", offer, NULL);
-  else if(*index==1) g_signal_emit_by_name (webrtc2, "set-local-description", offer, NULL);
+  g_signal_emit_by_name (usDa->wrbin, "set-local-description", offer, NULL);
 
   JsonObject *data = json_object_new();
   json_object_set_string_member(data, "type", "offer");
   json_object_set_string_member(data, "sdp", sdp);
   g_free(sdp);
 
-  send_data_to("offer", *index, data, remoteIDtmp);
+  send_data_to("offer", usDa->index, data, usDa->to);
 
   json_object_unref(data);
   gst_webrtc_session_description_free (offer);
@@ -169,19 +177,20 @@ static void on_answer_created(GstPromise * promise, gpointer wrbin){
   json_object_set_string_member(data, "sdp", sdp);
   g_free(sdp);
 
-  send_data_to("answer", 99, data, remoteIDtmp);
+  send_data_to("answer", 99, data, 99);
 
   json_object_unref(data);
   gst_webrtc_session_description_free(answer);
 }
 
  
-static void negotiate(GstElement * wrbin,const gint *index){
-  g_print("Negotiate for %i\n", *index);
+static void negotiate(userData *usDa){
+
+  g_print("Negotiate for %i to %i\n", usDa->index, usDa->to);
   GstPromise *promise;
 
-  promise = gst_promise_new_with_change_func((GstPromiseChangeFunc) on_offer_created,(gpointer) index, NULL);
-  g_signal_emit_by_name (wrbin, "create-offer", NULL, promise);
+  promise = gst_promise_new_with_change_func((GstPromiseChangeFunc) on_offer_created,usDa, NULL);
+  g_signal_emit_by_name (usDa->wrbin, "create-offer", NULL, promise);
 }
 
 /////// Signalling server connection ///////////////////////////////////////////////////////////
@@ -218,9 +227,9 @@ static void on_sign_message(SoupWebsocketConnection *ws_conn, SoupWebsocketDataT
 
     g_print("^^^ New conected %i = %s\n",id,ip);
 
-    remoteIDtmp = id;
-    negotiate(webrtc1,&zero);
-    negotiate(webrtc2,&uno);
+    if(id==1) negotiate(&usDa1);
+    else if(id==2) negotiate(&usDa2);
+    else g_print("aqui als elses lioo xxxxxxxxxxxxxxxxxxxxxxxxxxx\n");
 
   }else if(g_strcmp0(type, "socketOFF")==0){
 
@@ -231,8 +240,6 @@ static void on_sign_message(SoupWebsocketConnection *ws_conn, SoupWebsocketDataT
     g_print("vvv Disconected %i = %s\n",id,ip);
 
   }else if(g_strcmp0(type, "offer")==0){
-
-    remoteIDtmp=from;
 
     JsonObject *of = json_object_get_object_member(data, "data");
     const gchar *sdpText = json_object_get_string_member(of, "sdp");
@@ -270,8 +277,8 @@ static void on_sign_message(SoupWebsocketConnection *ws_conn, SoupWebsocketDataT
 
     GstWebRTCSessionDescription *answer;
     answer = gst_webrtc_session_description_new(GST_WEBRTC_SDP_TYPE_ANSWER, sdp);
-    if(index==0) g_signal_emit_by_name (webrtc1, "set-remote-description", answer, NULL);
-    else if(index==1) g_signal_emit_by_name (webrtc2, "set-remote-description", answer, NULL);
+    if(from==1) g_signal_emit_by_name (webrtc1, "set-remote-description", answer, NULL);
+    else if(from==2) g_signal_emit_by_name (webrtc2, "set-remote-description", answer, NULL);
 
   }else if(g_strcmp0(type, "candidate")==0){
 
@@ -283,8 +290,8 @@ static void on_sign_message(SoupWebsocketConnection *ws_conn, SoupWebsocketDataT
     gint sdpMLineIndex = json_object_get_int_member(ice, "sdpMLineIndex");
 
     g_print("Candidate received: %s\n", json_stringify(ice));
-    if(index==0) g_signal_emit_by_name (webrtc1, "add-ice-candidate", sdpMLineIndex, candidate);
-    else if(index==1) g_signal_emit_by_name (webrtc2, "add-ice-candidate", sdpMLineIndex, candidate);
+    if(from==1) g_signal_emit_by_name (webrtc1, "add-ice-candidate", sdpMLineIndex, candidate);
+    else if(from==2) g_signal_emit_by_name (webrtc2, "add-ice-candidate", sdpMLineIndex, candidate);
 
   }else g_print("Unknown type! %s\n",msg);
 
@@ -345,12 +352,13 @@ static void start_pipeline(){
 
   webrtc1 = gst_bin_get_by_name(GST_BIN (pipe1), "smpte");
   webrtc2 = gst_bin_get_by_name(GST_BIN (pipe1), "ball");
-
+  usDa1.wrbin = webrtc1;
+  usDa2.wrbin = webrtc2;
 
   //This is the gstwebrtc entry point where we create the offer and so on. It will be called when the pipeline goes to PLAYING.
   //***g_signal_connect(webrtc1, "on-negotiation-needed", G_CALLBACK (negotiate), NULL);
-  g_signal_connect(webrtc1, "on-ice-candidate", G_CALLBACK (send_ice_candidate), (gpointer) &zero);
-  g_signal_connect(webrtc2, "on-ice-candidate", G_CALLBACK (send_ice_candidate), (gpointer) &uno);
+  g_signal_connect(webrtc1, "on-ice-candidate", G_CALLBACK (send_ice_candidate), &usDa1);
+  g_signal_connect(webrtc2, "on-ice-candidate", G_CALLBACK (send_ice_candidate), &usDa2);
   /* Incoming streams will be exposed via this signal */
   g_signal_connect(webrtc1, "pad-added", G_CALLBACK (_webrtc_pad_added), pipe1);
   g_signal_connect(webrtc2, "pad-added", G_CALLBACK (_webrtc_pad_added), pipe1);
@@ -364,6 +372,9 @@ static void start_pipeline(){
 
 
 int main(int argc, char *argv[]){
+
+  usDa1.to = 1; usDa1.index = 0;
+  usDa2.to = 2; usDa2.index = 0;
 
   gst_init (&argc, &argv);
   g_print("Gst Server running\n");

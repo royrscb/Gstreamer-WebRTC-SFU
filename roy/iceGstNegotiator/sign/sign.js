@@ -141,8 +141,12 @@ function newID(){
 
   var ret;
 
-  if(savedIDs.length > 0) ret = savedIDs.shift();
-  else {
+  if(savedIDs.length > 0){
+
+    ret = Math.min.apply(null, savedIDs);
+    savedIDs.filter(e => e != ret);
+
+  }else {
 
     ret = ids;
     ids++;
