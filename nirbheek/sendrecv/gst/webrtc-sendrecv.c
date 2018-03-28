@@ -99,11 +99,8 @@ static void handle_media_stream (GstPad * pad, GstElement * pipe, const char * c
   g_print ("Trying to handle stream with %s ! %s", convert_name, sink_name);
 
   q = gst_element_factory_make ("queue", NULL);
-  g_assert_nonnull (q);
   conv = gst_element_factory_make (convert_name, NULL);
-  g_assert_nonnull (conv);
   sink = gst_element_factory_make (sink_name, NULL);
-  g_assert_nonnull (sink);
   gst_bin_add_many (GST_BIN (pipe), q, conv, sink, NULL);
   gst_element_sync_state_with_parent (q);
   gst_element_sync_state_with_parent (conv);

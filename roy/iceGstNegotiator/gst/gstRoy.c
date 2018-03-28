@@ -16,6 +16,7 @@
 #include <string.h>
 
 
+
 //////// Variables ///////////////////////////////////////////////////////////////
 const char* url_sign_server = "wss://127.0.0.1:3434";
 
@@ -29,7 +30,10 @@ typedef struct UserData{
 
   gint to;
   gint index;
+
   GstElement *wrbin;
+
+  gboolean ready;
   
 } userData;
 
@@ -167,18 +171,21 @@ static void on_answer_created(GstPromise * promise, gpointer wrbin){
  
 static void negotiate(userData *usDa){
 
-  g_print("Negotiate for %i to %i\n", usDa->index, usDa->to);
-  GstPromise *promise;
+  if(usDa->ready){
 
-  promise = gst_promise_new_with_change_func((GstPromiseChangeFunc) on_offer_created,usDa, NULL);
-  g_signal_emit_by_name (usDa->wrbin, "create-offer", NULL, promise);
+    g_print("Negotiate for %i to %i\n", usDa->index, usDa->to);
+    GstPromise *promise;
+
+    promise = gst_promise_new_with_change_func((GstPromiseChangeFunc) on_offer_created,usDa, NULL);
+    g_signal_emit_by_name (usDa->wrbin, "create-offer", NULL, promise);
+  }
 }
 
 
 
 ////////// PADS ////////////////////////////////////////////////////////////////////
 
-static void _final_pad(GstElement *webrtc, GstPad *new_pad, userData *usDa){
+static void play_from_pad(GstElement *webrtc, GstPad *new_pad, userData *usDa){
 
   g_print("final padd adeddddddddddddddkdkdkddk\n");
 
@@ -187,7 +194,7 @@ static void _final_pad(GstElement *webrtc, GstPad *new_pad, userData *usDa){
 
   if (GST_PAD_DIRECTION (new_pad) != GST_PAD_SRC) return;
 
-  out = gst_parse_bin_from_description ("rtpvp8depay ! vp8dec ! videoconvert ! queue ! xvimagesink", TRUE, NULL);
+  out = gst_parse_bin_from_description ("rtpvp8depay ! vp8dec ! videoconvert ! queue ! autodiveosink", TRUE, NULL);
   gst_bin_add (GST_BIN (pipe1), out);
   gst_element_sync_state_with_parent (out);
 
@@ -198,55 +205,42 @@ static void _final_pad(GstElement *webrtc, GstPad *new_pad, userData *usDa){
 }
 
 
+#define VIDEO_COD "vp8enc ! rtpvp8pay ! queue ! application/x-rtp,media=video,payload=96,encoding-name=VP8"
+#define AUDIO_COD "opusenc ! rtpopuspay ! queue ! application/x-rtp,media=audio,payload=97,encoding-name=OPUS"
 
 static void _webrtc_pad_added(GstElement *webrtc, GstPad *new_pad, userData *usDa){
 
-  g_print("Pad addedddddd: %i\n", usDa->to);
-
-
-  if(usDa->to == 2){
+  if(usDa->to == 1){ //if(usDa->to == 2){
 
 
     if (GST_PAD_DIRECTION (new_pad) != GST_PAD_SRC) return;
     else pad2add = new_pad;
 
+    g_print("Pad addedddddd: %i\n", usDa->to);
+
     usDaReal.to = 1;
     usDaReal.index = 1;
-
-    usDaReal.wrbin = gst_element_factory_make ("webrtcbin", "wrRealBin");
-    gst_bin_add (GST_BIN (pipe1), usDaReal.wrbin);
+    usDaReal.ready = TRUE;
 
 
-    GstPad *sinkpad = gst_element_get_request_pad (usDaReal.wrbin, "sink_%u");
-    gst_pad_link (new_pad, sinkpad);      gst_object_unref (sinkpad);
+    GstElement *out;
+    out=gst_parse_bin_from_description("rtpvp8depay ! vp8dec  ! queue ! "VIDEO_COD" ! webrtcbin name=wrRealBin", TRUE, NULL);
+    gst_bin_add(GST_BIN (pipe1), out);
 
+    GstPad *sink = out->sinkpads->data;
 
+    gst_pad_link (new_pad, sink);
+       
+
+    usDaReal.wrbin = gst_bin_get_by_name(GST_BIN (out), "wrRealBin");
     g_signal_connect(usDaReal.wrbin, "on-ice-candidate", G_CALLBACK (send_ice_candidate), &usDaReal);
-    //ell no menviara una puta merdaaa
+    g_signal_connect(usDaReal.wrbin, "on-negotiation-needed", G_CALLBACK (negotiate), &usDaReal);
 
+
+    gst_element_sync_state_with_parent (out);
     
-    gst_element_sync_state_with_parent (usDaReal.wrbin);
-
     negotiate(&usDaReal);
-
   }
-
-
-
-  /*
-  GstElement *out;
-  GstPad *sink;
-
-  if (GST_PAD_DIRECTION (new_pad) != GST_PAD_SRC) return;
-
-  out = gst_parse_bin_from_description ("rtpvp8depay ! vp8dec ! videoconvert ! queue ! xvimagesink", TRUE, NULL);
-  gst_bin_add (GST_BIN (pipe1), out);
-  gst_element_sync_state_with_parent (out);
-
-  sink = out->sinkpads->data;
-
-  gst_pad_link (new_pad, sink);
-  */
 }
 
 
@@ -284,8 +278,8 @@ static void on_sign_message(SoupWebsocketConnection *ws_conn, SoupWebsocketDataT
 
     g_print("^^^ New conected %i = %s\n",id,ip);
 
-    if(id==1) negotiate(&usDa1);
-    else if(id==2) negotiate(&usDa2);
+    if(id==1) {usDa1.ready = TRUE; negotiate(&usDa1); }
+    else if(id==2) { usDa2.ready = TRUE; negotiate(&usDa2);}
     else g_print("aqui als elses lioo xxxxxxxxxxxxxxxxxxxxxxxxxxx\n");
 
   }else if(g_strcmp0(type, "socketOFF")==0){
@@ -402,8 +396,6 @@ static void connect_webSocket_signServer(){
 }
 
 /////// Pipeline ///////////
-#define VIDEO_COD "vp8enc ! rtpvp8pay ! queue ! application/x-rtp,media=video,payload=96,encoding-name=VP8"
-#define AUDIO_COD "opusenc ! rtpopuspay ! queue ! application/x-rtp,media=audio,payload=97,encoding-name=OPUS"
 
 static void start_pipeline(){
 
@@ -422,7 +414,9 @@ static void start_pipeline(){
   usDa2.wrbin = webrtc2;
 
   //This is the gstwebrtc entry point where we create the offer and so on. It will be called when the pipeline goes to PLAYING.
-  //***g_signal_connect(webrtc1, "on-negotiation-needed", G_CALLBACK (negotiate), NULL);
+  g_signal_connect(webrtc1, "on-negotiation-needed", G_CALLBACK (negotiate), &usDa1);
+  g_signal_connect(webrtc1, "on-negotiation-needed", G_CALLBACK (negotiate), &usDa2);
+
   g_signal_connect(webrtc1, "on-ice-candidate", G_CALLBACK (send_ice_candidate), &usDa1);
   g_signal_connect(webrtc2, "on-ice-candidate", G_CALLBACK (send_ice_candidate), &usDa2);
   /* Incoming streams will be exposed via this signal */
@@ -439,8 +433,8 @@ static void start_pipeline(){
 
 int main(int argc, char *argv[]){
 
-  usDa1.to = 1; usDa1.index = 0;
-  usDa2.to = 2; usDa2.index = 0;
+  usDa1.to = 1; usDa1.index = 0; usDa1.ready = FALSE;
+  usDa2.to = 2; usDa2.index = 0; usDa2.ready = FALSE;
 
   gst_init (&argc, &argv);
   g_print("Gst Server running\n");
