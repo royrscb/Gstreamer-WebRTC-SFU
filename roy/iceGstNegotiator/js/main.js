@@ -10,7 +10,7 @@ var negotiateButton = document.getElementById("negotiateButton");
 var hangupButton = document.getElementById("hangupButton");
 
 startButton.onclick = start;
-negotiateButton.onclick = negotiate;
+negotiateButton.onclick = function(){negotiate(0);};
 hangupButton.onclick = hangup;
 
 
@@ -51,20 +51,21 @@ function start() {
   });
 }
 
-function negotiate(){
-  /*
+function negotiate(index){
 
-  negotiateButton.disabled = true;
+  if(localID != undefined){
 
-  peerConnection.createOffer().then(function(description){
+    negotiateButton.disabled = true;
 
-    console.log('Setting local description');
-    peerConnection.setLocalDescription(description);
+    pcs[index].createOffer().then(function(description){
 
-    console.log("%c>>>", 'color: red'," negotiating, sending offer:"); console.log(description);
-    wss.send(JSON.stringify({type:"offer", data:description, to:remoteID, from:localID}));
-  });
-  */
+      console.log('Setting local description');
+      pcs[index].setLocalDescription(description);
+
+      console.log("%c>>>", 'color: red'," negotiating, sending offer:"); console.log(description);
+      wss.send(JSON.stringify({type:"offer", index:index, data:description, to:remoteID, from:localID}));
+    });
+  }  
 }
 
 function hangup(){
@@ -137,9 +138,9 @@ function connectSignServer(){
 
     }else if(data.type=="answer"){
 
-      //console.log("<<< ANSWER received:"); console.log(data.data);
+      console.log("<<< ANSWER received:"); console.log(data.data);
 
-      //peerConnection.setRemoteDescription(new RTCSessionDescription(data.data));
+      pcs[data.index].setRemoteDescription(new RTCSessionDescription(data.data));
 
     }else if(data.type=="candidate"){
 
@@ -184,7 +185,7 @@ function createPeerConnection(index){
     }
   }
 
-  //pcs[index].onnegotiationneeded = negotiate;
+  pcs[index].onnegotiationneeded = function(){negotiate(index);}
 
   pcs[index].ontrack = function(ev){
 

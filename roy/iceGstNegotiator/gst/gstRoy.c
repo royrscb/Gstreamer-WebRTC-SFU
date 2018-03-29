@@ -194,7 +194,7 @@ static void play_from_pad(GstElement *webrtc, GstPad *new_pad, userData *usDa){
 
   if (GST_PAD_DIRECTION (new_pad) != GST_PAD_SRC) return;
 
-  out = gst_parse_bin_from_description ("rtpvp8depay ! vp8dec ! videoconvert ! queue ! autodiveosink", TRUE, NULL);
+  out = gst_parse_bin_from_description ("rtpvp8depay ! vp8dec ! videoconvert ! queue ! xvimagesink", TRUE, NULL);
   gst_bin_add (GST_BIN (pipe1), out);
   gst_element_sync_state_with_parent (out);
 
@@ -210,7 +210,7 @@ static void play_from_pad(GstElement *webrtc, GstPad *new_pad, userData *usDa){
 
 static void _webrtc_pad_added(GstElement *webrtc, GstPad *new_pad, userData *usDa){
 
-  if(usDa->to == 1){ //if(usDa->to == 2){
+  if(usDa->to == 2){
 
 
     if (GST_PAD_DIRECTION (new_pad) != GST_PAD_SRC) return;
@@ -224,8 +224,9 @@ static void _webrtc_pad_added(GstElement *webrtc, GstPad *new_pad, userData *usD
 
 
     GstElement *out;
-    out=gst_parse_bin_from_description("rtpvp8depay ! vp8dec  ! queue ! "VIDEO_COD" ! webrtcbin name=wrRealBin", TRUE, NULL);
+    out=gst_parse_bin_from_description("rtpvp8depay ! vp8dec ! videoconvert ! queue ! "VIDEO_COD" ! webrtcbin name=wrRealBin  ", TRUE, NULL);
     gst_bin_add(GST_BIN (pipe1), out);
+    gst_element_sync_state_with_parent (out);
 
     GstPad *sink = out->sinkpads->data;
 
@@ -237,7 +238,6 @@ static void _webrtc_pad_added(GstElement *webrtc, GstPad *new_pad, userData *usD
     g_signal_connect(usDaReal.wrbin, "on-negotiation-needed", G_CALLBACK (negotiate), &usDaReal);
 
 
-    gst_element_sync_state_with_parent (out);
     
     negotiate(&usDaReal);
   }
