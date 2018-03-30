@@ -63,7 +63,7 @@ function negotiate(index){
       pcs[index].setLocalDescription(description);
 
       console.log("%c>>>", 'color: red'," negotiating, sending offer:"); console.log(description);
-      wss.send(JSON.stringify({type:"offer", index:index, data:description, to:remoteID, from:localID}));
+      wss.send(JSON.stringify({type:"offer", data:description, from:localID, to:remoteID, index:index}));
     });
   }  
 }
@@ -94,7 +94,7 @@ function connectSignServer(){
     var data = JSON.parse(msg.data);
 
     console.log("------------------------------------------");
-    console.log("%c<<< ", 'color: green', "Type:"+data.type+" index:"+data.index+" from:"+data.from+" to:"+data.to);
+    console.log("%c<<< ", 'color: green', "Type:"+data.type+" from:"+data.from+" to:"+data.to+" index:"+data.index);
 
     if(data.type=="txt") console.log(data.data);
     else if(data.type=="id"){
@@ -133,7 +133,7 @@ function connectSignServer(){
         pcs[data.index].setLocalDescription(description);
 
         console.log('%c>>>', 'color: red','Sending answer '+data.index+':'); console.log(description);
-        wss.send(JSON.stringify({type:"answer", index:data.index, data:description, to:remoteID, from:localID}));
+        wss.send(JSON.stringify({type:"answer", data:description, from:localID, to:remoteID, index:data.index}));
       });
 
     }else if(data.type=="answer"){
@@ -181,7 +181,7 @@ function createPeerConnection(index){
 
       console.log("Sending candidate: "+index); console.log(ev.candidate);
 
-      wss.send(JSON.stringify({type:"candidate", index:index, data:ev.candidate, to:remoteID, from: localID}));
+      wss.send(JSON.stringify({type:"candidate", data:ev.candidate, from: localID, to:remoteID, index:index}));
     }
   }
 
@@ -225,7 +225,7 @@ inputSend.addEventListener("keyup", function(event) {
 
         var data = JSON.parse(txt);
 
-        console.log('%c>>>', 'color: red','Type:'+data.type+' from:'+data.from+' to:'+data.to); 
+        console.log('%c>>>', 'color: red','Type:'+data.type+' from:'+data.from+' to:'+data.to+' index:'+data.index); 
         console.log(data.data);
         
         wss.send(txt);
