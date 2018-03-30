@@ -7,10 +7,7 @@ Compile gstRoy.c: gcc gstRoy.c $(pkg-config --cflags --libs gstreamer-webrtc-1.0
 Run signalling server: nodejs sign.js
 
 
-
-
 This is my university final project.
-
 
 The project consists in building a basic SFU (Selective Forward Unit) server to serve WebRTC (Web Real Time Communications) peers media streams. 
 
