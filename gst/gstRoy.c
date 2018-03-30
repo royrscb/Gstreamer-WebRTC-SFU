@@ -151,22 +151,6 @@ void send_data_to(gchar *type, JsonObject *dataData, gint to, gint index){
   g_print(">>> Type:%s to:%i index:%i data: \n%s\n",type, to, index, json_stringify(dataData));
 }
 
-/////// Pipeline ///////////
-
-GstElement* start_pipeline(gint n){
-
-  GError *error = NULL;
-
-  pipes[n].pipel = gst_parse_launch ("videotestsrc ! queue ! "VIDEO_COD" ! webrtcbin name=newBin ", &error);
-
-  if (error) { g_printerr("Failed to parse launch: %s\n", error->message); g_error_free(error); }
-
-
-  g_print ("Starting pipeline n: %i\n", n);
-  gst_element_set_state (GST_ELEMENT (pipes[n].pipel), GST_STATE_PLAYING);
-
-  return gst_bin_get_by_name(GST_BIN (pipes[n].pipel), "newBin");
-}
 
 ///////////// Negotiation ///////////////////////////////////////////////////////////////////////
 
@@ -336,6 +320,23 @@ static void set_wrbin_pads(userData *usDa){
   g_signal_connect(peers[usDa->peerID].wrbins[usDa->index].wrbin, "on-negotiation-needed", G_CALLBACK (negotiate), usDa);
 }
 
+
+/////// Pipeline ///////////
+
+GstElement* start_pipeline(gint n){
+
+  GError *error = NULL;
+
+  pipes[n].pipel = gst_parse_launch ("videotestsrc ! queue ! "VIDEO_COD" ! webrtcbin name=newBin ", &error);
+
+  if (error) { g_printerr("Failed to parse launch: %s\n", error->message); g_error_free(error); }
+
+
+  g_print ("Starting pipeline n: %i\n", n);
+  gst_element_set_state (GST_ELEMENT (pipes[n].pipel), GST_STATE_PLAYING);
+
+  return gst_bin_get_by_name(GST_BIN (pipes[n].pipel), "newBin");
+}
 /////// Signalling server connection ///////////////////////////////////////////////////////////
 
 static void on_sign_message(SoupWebsocketConnection *ws_conn, SoupWebsocketDataType dataType, GBytes *message, gpointer user_data){

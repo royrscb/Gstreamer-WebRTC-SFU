@@ -1,0 +1,44 @@
+{
+	type :"txt",
+	data : "this is an example of txt"
+	from: "3",
+	to: "2"
+}
+
+{
+	type :"gstServerON",
+	data : "this is an example of txt broadcast"
+	from: "0",
+	to: "-2"
+}
+
+{
+	type :"offer",
+	data : {	type: "offer",
+				sdp: "v=0\r\no=- 3295886605196749790 0 IN IP4 0.0.0.0\r\ns=-\r\nt=0 0\r\na=ice-options:trickle\r\nm=video 9 UDP/TLS/RTP/SAVPF 96\r\nc=IN IP4 0.0.0.0\r\na=setup:actpass\r\na=ice-ufrag:YmeDxY55O/zxxlW6AaF558gmHp1LZKMT\r\na=ice-pwd:tHdH7t3MdeOX9PjQLCmTLOuSV7qk+PeT\r\na=sendrecv\r\na=rtcp-mux\r\na=rtcp-rsize\r\na=rtpmap:96 VP8/90000\r\na=rtcp-fb:96 nack\r\na=rtcp-fb:96 nack pli\r\na=mid:video0\r\na=fingerprint:sha-256 13:F7:09:62:CF:04:DE:EC:29:B4:56:E7:28:E5:D9:60:E4:66:F5:6F:2B:D8:7B:C9:51:3C:50:E7:CA:19:12:95\r\n"}
+	from: "3",
+	to: "2",
+	index: 2
+}
+
+{
+	type :"answer",
+	data : { 	type: "answer",
+     			sdp: "v=0\r\no=- 4936740135288745977 2 IN IP4 127.0.0.1\r\ns=-\r\nt=0 0\r\na=msid-semantic: WMS 0YOxOYHhyKNzdjH4cISuwi3z5tuLltucXv3x\r\nm=video 9 UDP/TLS/RTP/SAVPF 96\r\nc=IN IP4 0.0.0.0\r\na=rtcp:9 IN IP4 0.0.0.0\r\na=ice-ufrag:2TqC\r\na=ice-pwd:I1DeaV+OJljz3DWP3rRq+lRP\r\na=ice-options:trickle\r\na=fingerprint:sha-256 4F:61:AB:EF:AA:30:BD:42:EA:82:38:49:CA:15:BA:FC:3F:6A:08:34:8E:0D:04:EF:FA:B7:FA:3B:6A:85:55:B0\r\na=setup:active\r\na=mid:video0\r\na=sendrecv\r\na=rtcp-mux\r\na=rtcp-rsize\r\na=rtpmap:96 VP8/90000\r\na=rtcp-fb:96 nack\r\na=rtcp-fb:96 nack pli\r\na=ssrc:131659940 cname:gSyzOVDeqF8Nwh5h\r\na=ssrc:131659940 msid:0YOxOYHhyKNzdjH4cISuwi3z5tuLltucXv3x a79bd9df-bd50-4484-aec9-5e0665a47702\r\na=ssrc:131659940 mslabel:0YOxOYHhyKNzdjH4cISuwi3z5tuLltucXv3x\r\na=ssrc:131659940 label:a79bd9df-bd50-4484-aec9-5e0665a47702\r\n" }
+	from: "3",
+	to: "2",
+	index: 0
+}
+
+{
+	type :"candidate",
+	data : { 	candidate: "candidate:2747803661 1 udp 2122265343 fdf9:ce51:e70a:0:14db:9847:686:702a 38896 typ host generation 0 ufrag 2TqC network-id 3 network-cost 10",
+     			sdpMid: "video0",
+     			sdpMLineIndex: 0 }
+	from: "3",
+	to: "2",
+	index: 1
+}
+
+
+
