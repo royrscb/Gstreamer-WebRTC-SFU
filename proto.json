@@ -7,7 +7,7 @@
 
 {
 	type :"gstServerON",
-	data : "this is an example of txt broadcast"
+	data : "this is an example of txt broadcast!"
 	from: "0",
 	to: "-2"
 }

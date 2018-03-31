@@ -56,7 +56,7 @@ const char* url_sign_server = "wss://127.0.0.1:3434";
 #define AUDIO_COD "opusenc ! rtpopuspay ! queue ! application/x-rtp,media=audio,payload=97,encoding-name=OPUS"
 
 // Because callbacks needs pointers 
-const userData  tmpUsDa10={ .peerID=1, .index=0 },
+userData  tmpUsDa10={ .peerID=1, .index=0 },
           tmpUsDa11={ .peerID=1, .index=1 }, 
           tmpUsDa20={ .peerID=2, .index=0 },
           tmpUsDa21={ .peerID=2, .index=1 };
@@ -293,13 +293,13 @@ static void on_pad_added(GstElement *webrtc, GstPad *new_pad, userData *usDa){
     // Debug
     const gchar *sinkPad_type = gst_structure_get_name(gst_caps_get_structure (gst_pad_query_caps (sinkPad, NULL), 0));
 
-    if(GST_PAD_LINK_FAILED (ret)) g_print("\n\n\nLINK FAILED!\n\n");
+    if(GST_PAD_LINK_FAILED (ret)) g_print("\n\n\n\nLINK FAILED!\n\n");
     else g_print("\n\n\nLINK SUCCESFULLY!\n\n");
 
     if(gst_pad_is_linked(new_pad)) g_print("new_pad type:%s YES linked!\n", new_pad_type); 
     else g_print("new_pad type:%s NOT linked!\n", new_pad_type);
     if(gst_pad_is_linked(sinkPad)) g_print("sinkPad type:%s YES linked!\n\n", sinkPad_type);
-    else g_print("sinkPad type:%s NOT linked!\n\n", sinkPad_type);
+    else g_print("sinkPad type:%s NOT linked!\n\n\n\n", sinkPad_type);
     //if(!gst_pad_is_linked(new_pad) || !gst_pad_is_linked(new_pad)) { g_main_loop_quit(loop); return; }
 
 
