@@ -124,8 +124,6 @@ wss.on('connection', function(socket, req) {
 
 
 ////////////// Private Functions //////////////////////////////////////////////////////
-
-
 wss.broadcast = function(msg, type = "txt", exception = null, from=SIGNALLING_SERVER_ID) {
   Object.keys(sockets).forEach(function(id){ 
       
