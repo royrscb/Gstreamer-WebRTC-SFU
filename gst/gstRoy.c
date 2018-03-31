@@ -231,56 +231,86 @@ static void negotiate(GstPromise *promise, userData *usDa){
 ////////// PADS ////////////////////////////////////////////////////////////////////
 static void set_wrbin_pads(userData *usDa);
 
-static void play_from_pad(GstElement *webrtc, GstPad *new_pad, userData *usDa){
-
-  g_print("final padd adeddddddddddddddkdkdkddk\n");
-
-  GstElement *out;
-  GstPad *sink;
+static void fake_link_srcpad(GstElement *webrtc, GstPad *new_pad, userData *usDa){
 
   if (GST_PAD_DIRECTION (new_pad) != GST_PAD_SRC) return;
   else peers[usDa->peerID].wrbins[usDa->index].srcPad = new_pad;
 
-  out = gst_parse_bin_from_description ("rtpvp8depay ! vp8dec ! videoconvert ! queue ! xvimagesink", TRUE, NULL);
-  gst_bin_add (GST_BIN (peers[usDa->peerID].pipel), out);
 
-  sink = out->sinkpads->data;
+  GstElement *fakesink = gst_element_factory_make("fakesink", NULL);
 
-  gst_pad_link (new_pad, sink);
+  gst_bin_add(GST_BIN (peers[ peers[usDa->peerID].wrbins[usDa->index].ownerPipe ].pipel), fakesink);
+  GstPad *sinkPad = gst_element_get_static_pad(fakesink, "sink");
+
+  gst_pad_link(new_pad, sinkPad);
+
+  gst_element_sync_state_with_parent(fakesink);
+}
+
+static void play_from_srcpad(GstElement *webrtc, GstPad *new_pad, userData *usDa){
 
 
-  gst_element_sync_state_with_parent (out);
+  if (GST_PAD_DIRECTION (new_pad) != GST_PAD_SRC) return;
+  else peers[usDa->peerID].wrbins[usDa->index].srcPad = new_pad;
+
+  GstElement *outBin = gst_parse_bin_from_description ("rtpvp8depay ! vp8dec ! videoconvert ! queue ! autovideosink", TRUE, NULL);
+  gst_bin_add(GST_BIN (peers[usDa->peerID].pipel), outBin);
+
+  GstPad *sinkPad = outBin->sinkpads->data;
+  gst_pad_link (new_pad, sinkPad);
+
+
+  gst_element_sync_state_with_parent(outBin);
 }
 
 
 static void _webrtc_pad_added(GstElement *webrtc, GstPad *new_pad, userData *usDa){
 
-  if(usDa->peerID == 2 && usDa->index == 0){
+  const gchar *new_pad_type = gst_structure_get_name(gst_caps_get_structure (gst_pad_query_caps (new_pad, NULL), 0));
 
+  g_print("[[[ Pad type:%s added. From:%i index: %i\n", new_pad_type, usDa->peerID, usDa->index);
+
+  if(usDa->peerID == 2 && usDa->index == 0){
 
     if (GST_PAD_DIRECTION (new_pad) != GST_PAD_SRC) return;
     else  peers[usDa->peerID].wrbins[usDa->index].srcPad = new_pad;
-
-    g_print("Pad from:%i addedddddd: %i\n",usDa->peerID, usDa->index);
 
 
     gint peer2conn = 1;//im connecting the new pad with a new werbrtcbin of peer 1
     gint pipe2connOwner = 2;//the owner of the pipe is the peer 2
 
 
-    GstElement *out;
-    out=gst_parse_bin_from_description("rtpvp8depay ! queue ! rtpvp8pay ! queue ! application/x-rtp,media=video1,payload=96,encoding-name=VP8 ! webrtcbin name=newBin ", TRUE, NULL);
-    gst_bin_add(GST_BIN (peers[pipe2connOwner].pipel), out);
+    GstElement *outBin = gst_parse_bin_from_description(
+      "rtpvp8depay name=dp ! queue ! rtpvp8pay ! queue ! application/x-rtp,media=video,payload=96,encoding-name=VP8 ! webrtcbin name=newBin"
+      , TRUE, NULL);
+    gst_bin_add(GST_BIN (peers[pipe2connOwner].pipel), outBin); //add to proper pipe
 
-    GstPad *sink = out->sinkpads->data;
+    //GstPad *sinkPad = outBin->sinkpads->data;  //option 1
+    GstPad *sinkPad = gst_element_get_static_pad(gst_bin_get_by_name(GST_BIN(outBin), "dp"), "sink");  //option 2
 
-    gst_pad_link (new_pad, sink);
+    GstStateChangeReturn ret = gst_pad_link (new_pad, sinkPad);
+
+
+
+    if(GST_PAD_LINK_FAILED (ret)) g_print("\n\n\nLINK FAILED!\n\n");
+    else g_print("\n\n\nLINK SUCCESFULLY!\n\n");
+
+    const gchar *sinkPad_type = gst_structure_get_name(gst_caps_get_structure (gst_pad_query_caps (sinkPad, NULL), 0));
+
+    if(gst_pad_is_linked(new_pad)) g_print("new_pad type:%s YES linked!\n", new_pad_type); 
+    else g_print("new_pad type:%s NOT linked!\n", new_pad_type);
+
+    if(gst_pad_is_linked(sinkPad)) g_print("sinkPad type:%s YES linked!\n\n", sinkPad_type);
+    else g_print("sinkPad type:%s NOT linked!\n\n", sinkPad_type);
+
+    if(!gst_pad_is_linked(new_pad) || !gst_pad_is_linked(new_pad)) g_main_loop_quit(loop);
+
 
 
 
     struct Wrbin new_wrbin;
-    new_wrbin.wrbin = gst_bin_get_by_name(GST_BIN (out), "newBin");
-    new_wrbin.sinkPad = sink;
+    new_wrbin.wrbin = gst_bin_get_by_name(GST_BIN (outBin), "newBin");
+    new_wrbin.sinkPad = sinkPad;
     new_wrbin.ownerPeer = peer2conn;
     new_wrbin.ownerPipe = pipe2connOwner; 
 
@@ -295,11 +325,10 @@ static void _webrtc_pad_added(GstElement *webrtc, GstPad *new_pad, userData *usD
 
     set_wrbin_pads(usDa2);
 
-    gst_element_sync_state_with_parent(out);
+    gst_element_sync_state_with_parent(outBin);
 
     
-    //negotiate(usDa2);
-  }
+  }else fake_link_srcpad(webrtc, new_pad, usDa);
 }
 
 
@@ -389,6 +418,10 @@ static void on_sign_message(SoupWebsocketConnection *ws_conn, SoupWebsocketDataT
     JsonObject *data_data = json_object_get_object_member(data, "data");
     const gint id = json_object_get_int_member(data_data, "id");
     const gchar *ip = json_object_get_string_member(data_data, "ip");
+
+    peers[id].id=99;
+
+    if(npeers>0) npeers--;
 
 
     g_print("vvv Disconected %i = %s\n",id,ip);
