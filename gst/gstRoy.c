@@ -50,24 +50,13 @@ typedef struct UserData{
 
 
 /////// Constants ////////////////////////////////////////////////////////////////
+const char* url_sign_server = "wss://127.0.0.1:3434";
+
 #define VIDEO_COD "vp8enc ! rtpvp8pay ! queue ! application/x-rtp,media=video,payload=96,encoding-name=VP8"
 #define AUDIO_COD "opusenc ! rtpopuspay ! queue ! application/x-rtp,media=audio,payload=97,encoding-name=OPUS"
 
-
-//////// Variables ///////////////////////////////////////////////////////////////
-const char* url_sign_server = "wss://127.0.0.1:3434";
-
-static GMainLoop *loop = NULL;
-static SoupWebsocketConnection *ws_conn = NULL;
-
-
-gint npeers=0;
-struct Peer peers[10];
-
-
-
-//////// TO REALLY SOLVE //////////////////////////
-userData  tmpUsDa10={ .peerID=1, .index=0 },
+// Because callbacks needs pointers 
+const userData  tmpUsDa10={ .peerID=1, .index=0 },
           tmpUsDa11={ .peerID=1, .index=1 }, 
           tmpUsDa20={ .peerID=2, .index=0 },
           tmpUsDa21={ .peerID=2, .index=1 };
@@ -86,6 +75,16 @@ userData* getStaticUsDa(gint peerID, gint index){
   
   }else g_print("Error requesting usDa");
 }
+
+
+//////// Variables ///////////////////////////////////////////////////////////////
+static GMainLoop *loop = NULL;
+static SoupWebsocketConnection *ws_conn = NULL;
+
+
+gint npeers=0;
+struct Peer peers[10];
+
 
 //////////// JSON functions ///////////////////////////////////////////////////////////////////
 
@@ -264,7 +263,7 @@ static void play_from_srcpad(GstElement *webrtc, GstPad *new_pad, userData *usDa
 }
 
 
-static void _webrtc_pad_added(GstElement *webrtc, GstPad *new_pad, userData *usDa){
+static void on_pad_added(GstElement *webrtc, GstPad *new_pad, userData *usDa){
 
   const gchar *new_pad_type = gst_structure_get_name(gst_caps_get_structure (gst_pad_query_caps (new_pad, NULL), 0));
 
@@ -291,29 +290,25 @@ static void _webrtc_pad_added(GstElement *webrtc, GstPad *new_pad, userData *usD
     GstStateChangeReturn ret = gst_pad_link (new_pad, sinkPad);
 
 
+    // Debug
+    const gchar *sinkPad_type = gst_structure_get_name(gst_caps_get_structure (gst_pad_query_caps (sinkPad, NULL), 0));
 
     if(GST_PAD_LINK_FAILED (ret)) g_print("\n\n\nLINK FAILED!\n\n");
     else g_print("\n\n\nLINK SUCCESFULLY!\n\n");
 
-    const gchar *sinkPad_type = gst_structure_get_name(gst_caps_get_structure (gst_pad_query_caps (sinkPad, NULL), 0));
-
     if(gst_pad_is_linked(new_pad)) g_print("new_pad type:%s YES linked!\n", new_pad_type); 
     else g_print("new_pad type:%s NOT linked!\n", new_pad_type);
-
     if(gst_pad_is_linked(sinkPad)) g_print("sinkPad type:%s YES linked!\n\n", sinkPad_type);
     else g_print("sinkPad type:%s NOT linked!\n\n", sinkPad_type);
-
-    if(!gst_pad_is_linked(new_pad) || !gst_pad_is_linked(new_pad)) g_main_loop_quit(loop);
-
+    if(!gst_pad_is_linked(new_pad) || !gst_pad_is_linked(new_pad)) { g_main_loop_quit(loop); return; }
 
 
-
+    // Getting the webrtcbin to store it and set signal pads
     struct Wrbin new_wrbin;
     new_wrbin.wrbin = gst_bin_get_by_name(GST_BIN (outBin), "newBin");
     new_wrbin.sinkPad = sinkPad;
     new_wrbin.ownerPeer = peer2conn;
     new_wrbin.ownerPipe = pipe2connOwner; 
-
 
     gint newWrbinIndex = peers[peer2conn].nwrbins; 
 
@@ -321,6 +316,7 @@ static void _webrtc_pad_added(GstElement *webrtc, GstPad *new_pad, userData *usD
     peers[peer2conn].nwrbins++;
 
 
+    // Connect signals and goes to play
     userData *usDa2 = getStaticUsDa(peer2conn, newWrbinIndex);
 
     set_wrbin_pads(usDa2);
@@ -332,13 +328,13 @@ static void _webrtc_pad_added(GstElement *webrtc, GstPad *new_pad, userData *usD
 }
 
 
+
 static void set_wrbin_pads(userData *usDa){
 
   g_signal_connect(peers[usDa->peerID].wrbins[usDa->index].wrbin, "on-ice-candidate", G_CALLBACK (send_ice_candidate), usDa);
-  g_signal_connect(peers[usDa->peerID].wrbins[usDa->index].wrbin, "pad-added", G_CALLBACK (_webrtc_pad_added), usDa);
+  g_signal_connect(peers[usDa->peerID].wrbins[usDa->index].wrbin, "pad-added", G_CALLBACK (on_pad_added), usDa);
   g_signal_connect(peers[usDa->peerID].wrbins[usDa->index].wrbin, "on-negotiation-needed", G_CALLBACK (negotiate), usDa);
 }
-
 
 /////// Pipeline ///////////
 

@@ -83,6 +83,8 @@ function hangup(){
   */
 }
 
+
+
 function connectSignServer(){
 
   console.log("Connecting to the signalling server");
