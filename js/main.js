@@ -187,7 +187,7 @@ function createPeerConnection(index){
 
   pcs[index].onnegotiationneeded = function(){negotiate(index);}
 
-  pcs[index].ontrack = function(ev){
+  pcs[index].ontrack = function(ev){console.log("nou trackiing: index:"+index);console.log("");console.log(ev);
 
     remoteVideos[index].srcObject = ev.streams[0];
     
