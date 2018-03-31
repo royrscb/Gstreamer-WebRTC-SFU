@@ -16,6 +16,39 @@
 #include <string.h>
 
 
+/////// Structs //////////////////////////////////////////////////////////////////
+struct Wrbin{
+
+  GstElement *wrbin;
+
+  GstPad *sinkPad;
+  GstPad *srcPad;
+
+  gint ownerPeer;   //id of the peer who owns this wrbin
+  gint ownerPipe; //id of the peer who own the pipe where this wrbin is
+};
+
+struct Peer{
+
+  gint id;
+
+  GstElement *pipel;
+
+  struct Wrbin wrbins[5];
+  gint nwrbins;
+};
+
+
+
+typedef struct UserData{
+
+  gint peerID;
+
+  gint index;
+
+} userData;
+
+
 /////// Constants ////////////////////////////////////////////////////////////////
 #define VIDEO_COD "vp8enc ! rtpvp8pay ! queue ! application/x-rtp,media=video,payload=96,encoding-name=VP8"
 #define AUDIO_COD "opusenc ! rtpopuspay ! queue ! application/x-rtp,media=audio,payload=97,encoding-name=OPUS"
@@ -28,51 +61,9 @@ static GMainLoop *loop = NULL;
 static SoupWebsocketConnection *ws_conn = NULL;
 
 
-struct Wrbin{
-
-  GstElement *wrbin;
-
-  GstPad *sinkPad;
-  GstPad *srcPad;
-
-  gint peerOwner;
-  gint pipeOwner;
-};
-
-
-struct Peer{
-
-  gint id;
-
-  struct Wrbin wrbins[5];
-  gint nwrbins;
-
-};
-
-
-struct Pipeline{
-
-  GstElement *pipel;
-  
-  struct Wrbin wrbins[5];
-  gint nwrbins;
-
-};
-
 gint npeers=0;
 struct Peer peers[10];
 
-gint npipes=0;
-struct Pipeline pipes[5];
-
-
-typedef struct UserData{
-
-  gint peerID;
-
-  gint index;
-
-} userData;
 
 
 //////// TO REALLY SOLVE //////////////////////////
@@ -248,15 +239,17 @@ static void play_from_pad(GstElement *webrtc, GstPad *new_pad, userData *usDa){
   GstPad *sink;
 
   if (GST_PAD_DIRECTION (new_pad) != GST_PAD_SRC) return;
+  else peers[usDa->peerID].wrbins[usDa->index].srcPad = new_pad;
 
   out = gst_parse_bin_from_description ("rtpvp8depay ! vp8dec ! videoconvert ! queue ! xvimagesink", TRUE, NULL);
-  gst_bin_add (GST_BIN (pipes[ peers[usDa->peerID].wrbins[usDa->index].pipeOwner ].pipel), out);
-  gst_element_sync_state_with_parent (out);
+  gst_bin_add (GST_BIN (peers[usDa->peerID].pipel), out);
 
   sink = out->sinkpads->data;
 
   gst_pad_link (new_pad, sink);
 
+
+  gst_element_sync_state_with_parent (out);
 }
 
 
@@ -271,13 +264,13 @@ static void _webrtc_pad_added(GstElement *webrtc, GstPad *new_pad, userData *usD
     g_print("Pad from:%i addedddddd: %i\n",usDa->peerID, usDa->index);
 
 
-    gint peer2conn = 1;//primer conectat
-    gint pipe2conn = 1;//segona pipe creada
+    gint peer2conn = 1;//im connecting the new pad with a new werbrtcbin of peer 1
+    gint pipe2connOwner = 2;//the owner of the pipe is the peer 2
 
 
     GstElement *out;
     out=gst_parse_bin_from_description("rtpvp8depay ! queue ! rtpvp8pay ! queue ! application/x-rtp,media=video1,payload=96,encoding-name=VP8 ! webrtcbin name=newBin ", TRUE, NULL);
-    gst_bin_add(GST_BIN (pipes[pipe2conn].pipel), out);
+    gst_bin_add(GST_BIN (peers[pipe2connOwner].pipel), out);
 
     GstPad *sink = out->sinkpads->data;
 
@@ -288,19 +281,17 @@ static void _webrtc_pad_added(GstElement *webrtc, GstPad *new_pad, userData *usD
     struct Wrbin new_wrbin;
     new_wrbin.wrbin = gst_bin_get_by_name(GST_BIN (out), "newBin");
     new_wrbin.sinkPad = sink;
-    new_wrbin.peerOwner=peer2conn;
-    new_wrbin.pipeOwner=pipe2conn; 
+    new_wrbin.ownerPeer = peer2conn;
+    new_wrbin.ownerPipe = pipe2connOwner; 
 
-    gint newIndex = peers[peer2conn].nwrbins; 
 
-    pipes[pipe2conn].wrbins[ pipes[pipe2conn].nwrbins ] = new_wrbin;
-    pipes[pipe2conn].nwrbins++;
+    gint newWrbinIndex = peers[peer2conn].nwrbins; 
 
-    peers[peer2conn].wrbins[newIndex] = new_wrbin;
+    peers[peer2conn].wrbins[newWrbinIndex] = new_wrbin;
     peers[peer2conn].nwrbins++;
 
 
-    userData *usDa2 = getStaticUsDa(peer2conn, newIndex);
+    userData *usDa2 = getStaticUsDa(peer2conn, newWrbinIndex);
 
     set_wrbin_pads(usDa2);
 
@@ -322,19 +313,27 @@ static void set_wrbin_pads(userData *usDa){
 
 /////// Pipeline ///////////
 
-GstElement* start_pipeline(gint n){
+GstElement* start_pipeline(userData *usDa){
 
   GError *error = NULL;
 
-  pipes[n].pipel = gst_parse_launch ("videotestsrc ! queue ! "VIDEO_COD" ! webrtcbin name=newBin ", &error);
-
+  GstElement * new_pipe = gst_parse_launch ("videotestsrc pattern=ball ! queue ! "VIDEO_COD" ! webrtcbin name=newBin ", &error);
   if (error) { g_printerr("Failed to parse launch: %s\n", error->message); g_error_free(error); }
+    
+  peers[usDa->peerID].pipel = new_pipe;
 
+  struct Wrbin new_wrbin;  
+  new_wrbin.wrbin = gst_bin_get_by_name(GST_BIN (new_pipe), "newBin");
+  new_wrbin.ownerPeer = usDa->peerID;
+  new_wrbin.ownerPipe = usDa->peerID;
 
-  g_print ("Starting pipeline n: %i\n", n);
-  
+  peers[usDa->peerID].wrbins[usDa->index] = new_wrbin; //index here will allways be 0 due the pipeline is starting.
+  peers[usDa->peerID].nwrbins++;
 
-  return gst_bin_get_by_name(GST_BIN (pipes[n].pipel), "newBin");
+  set_wrbin_pads(usDa);
+
+  g_print ("Starting pipeline for peer: %i\n", usDa->peerID );
+  gst_element_set_state (GST_ELEMENT (new_pipe), GST_STATE_PLAYING);
 }
 /////// Signalling server connection ///////////////////////////////////////////////////////////
 
@@ -373,24 +372,15 @@ static void on_sign_message(SoupWebsocketConnection *ws_conn, SoupWebsocketDataT
     g_print("^^^ New conected %i = %s\n",id,ip);
 
 
-
-    struct Wrbin new_wrbin;
-    new_wrbin.wrbin = start_pipeline(npipes); npipes++;
-    new_wrbin.pipeOwner = npipes -1;
-    new_wrbin.peerOwner = id;
-
-    pipes[npipes -1].wrbins[pipes[npipes -1].nwrbins] = new_wrbin;
-    pipes[npipes -1].nwrbins++; 
-
-    struct Peer new_peer = { .id=id, .wrbins[0]=new_wrbin, .nwrbins=1 };
-    peers[id] = new_peer;
-    npeers++;
-
     userData *usDa = getStaticUsDa(id, 0);
 
-    set_wrbin_pads(usDa);
-
-    gst_element_set_state (GST_ELEMENT (pipes[npipes -1].pipel), GST_STATE_PLAYING);
+    struct Peer new_peer;
+    new_peer.id = id;
+    new_peer.nwrbins = 0;
+    peers[id] = new_peer;
+    npeers++;
+   
+    start_pipeline(usDa);
 
     //negotiate(usDa);
 
@@ -497,7 +487,7 @@ static void connect_webSocket_signServer(){
 }
 
 
-int main(int argc, char *argv[]){
+int main(int argc, char *argv[]){ int i; for(i=0; i<10; i++) peers[i].id = 99;
 
   gst_init (&argc, &argv);
   g_print("Gst Server running\n");
