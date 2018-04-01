@@ -72,19 +72,24 @@ function negotiate(index){
   }
 }
 
-function hangup(index){
-  /*
+function hangup(){
+  
+  console.log("Hanging up peerConnections");
 
-  console.log("Hanging up peerConnection "+index);
+  var i;
+  for(i=0; i<pcs.length; i++){
 
-  pcs[index].close();
-  pcs[index] = null;
+    pcs[i].close();
+    delete pcs[i];
+  }
+
+  wss.close();
 
   remoteID = 0;
+  localID == undefined;
 
   hangupButton.disabled = true;
   negotiateButton.disabled = false;
-  */
 }
 
 
