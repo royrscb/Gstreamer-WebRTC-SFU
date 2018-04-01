@@ -67,13 +67,13 @@ function negotiate(index){
   }  
 }
 
-function hangup(){
+function hangup(index){
   /*
 
-  console.log("Hanging up");
+  console.log("Hanging up peerConnection "+index);
 
-  peerConnection.close();
-  peerConnection = null;
+  pcs[index].close();
+  pcs[index] = null;
 
   remoteID = 0;
 

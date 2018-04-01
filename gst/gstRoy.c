@@ -301,7 +301,7 @@ static void on_pad_added(GstElement *webrtc, GstPad *new_pad, userData *usDa){
     else g_print("new_pad type:%s NOT linked!\n", new_pad_type);
     if(gst_pad_is_linked(sinkPad)) g_print("sinkPad type:%s YES linked!\n\n", sinkPad_type);
     else g_print("sinkPad type:%s NOT linked!\n\n\n\n", sinkPad_type);
-    if(!gst_pad_is_linked(new_pad) || !gst_pad_is_linked(new_pad)) { g_main_loop_quit(loop); return; }
+    //if(!gst_pad_is_linked(new_pad) || !gst_pad_is_linked(new_pad)) { g_main_loop_quit(loop); return; }
 
 
     // Getting the webrtcbin to store it and set signal pads
@@ -343,7 +343,7 @@ static GstElement* start_pipeline(userData *usDa){
 
   GError *error = NULL;
 
-  GstElement * new_pipe = gst_parse_launch ("videotestsrc pattern=ball ! queue ! "VIDEO_COD" ! webrtcbin name=newBin ", &error);
+  GstElement * new_pipe = gst_parse_launch ("videotestsrc pattern=smpte ! queue ! "VIDEO_COD" ! webrtcbin name=newBin ", &error);
   if (error) { g_printerr("Failed to parse launch: %s\n", error->message); g_error_free(error); }
     
   peers[usDa->peerID].pipel = new_pipe;
