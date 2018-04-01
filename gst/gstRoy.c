@@ -142,7 +142,7 @@ void send_data_to(gchar *type, JsonObject *dataData, gint to, gint index){
 
 ///////////// Negotiation ///////////////////////////////////////////////////////////////////////
 
-static void send_ice_candidate(GstElement * webrtc G_GNUC_UNUSED, guint mlineindex, gchar * candidate, userData *usDa){
+static void send_ice_candidate(GstElement * webrtc, guint mlineindex, gchar * candidate, userData *usDa){
 
   g_print("Send candidate to peer:%i for webrtcbin:%i\n", usDa->peerID, usDa->index);
 
