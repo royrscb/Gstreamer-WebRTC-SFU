@@ -37,6 +37,8 @@ var localStream, pcs = [], wss;
 function start() {
 
   startButton.disabled = true;
+  
+  createPeerConnection(0);
 
   var constraints = {video: true, audio: false};
 
@@ -46,25 +48,24 @@ function start() {
     console.log("Requesting local media");
     localStream = stream;
 
+    stream.getTracks().forEach(track => pcs[0].addTrack(track, stream));
+
     connectSignServer();
   });
 }
 
 function negotiate(index){
 
-  if(localID != undefined){
+  negotiateButton.disabled = true;
 
-    negotiateButton.disabled = true;
+  pcs[index].createOffer().then(function(description){
 
-    pcs[index].createOffer().then(function(description){
+    console.log('Setting local description');
+    pcs[index].setLocalDescription(description);
 
-      console.log('Setting local description');
-      pcs[index].setLocalDescription(description);
-
-      console.log("%c>>>", 'color: red'," negotiating, sending offer:"); console.log(description);
-      wss.send(JSON.stringify({type:"offer", data:description, from:localID, to:remoteID, index:index}));
-    });
-  }  
+    console.log("%c>>>", 'color: red'," negotiating, sending offer:"); console.log(description);
+    wss.send(JSON.stringify({type:"offer", data:description, from:localID, to:remoteID, index:index}));
+  });
 }
 
 function hangup(index){
@@ -125,8 +126,8 @@ function connectSignServer(){
 
       console.log('<<< OFFER '+data.index+' received:'); console.log(data.data);
 
-      if(data.index == 0) createPeerConnection(data.index, localStream);
-      else createPeerConnection(data.index, null);
+      if(data.index > 0) createPeerConnection(data.index);
+
 
       pcs[data.index].setRemoteDescription(new RTCSessionDescription(data.data));
 
@@ -171,12 +172,11 @@ function connectSignServer(){
   }
 }
 
-function createPeerConnection(index, stream){
+function createPeerConnection(index){
 
   console.log('Creating peer connection '+index);
   pcs[index] = new RTCPeerConnection();
 
-  if(stream != null) stream.getTracks().forEach(track => pcs[index].addTrack(track, stream));
 
   pcs[index].onicecandidate = function(ev){
 
@@ -188,7 +188,7 @@ function createPeerConnection(index, stream){
     }
   }
 
-  pcs[index].onnegotiationneeded = function(){negotiate(index);}
+  //pcs[index].onnegotiationneeded = function(){negotiate(index);}
 
   pcs[index].ontrack = function(ev){
 
