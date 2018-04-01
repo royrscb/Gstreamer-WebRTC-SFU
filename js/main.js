@@ -14,27 +14,29 @@ negotiateButton.onclick = function(){negotiate(0);};
 hangupButton.onclick = hangup;
 
 
-//////// Variables //////////////////////////////////////////////////
+///////// Constants /////////////////////////
 const GST_SERVER_ID = 0;
 const BROADCAST=-2;
 
-var localStream, pcs = [], wss, localID, remoteID=GST_SERVER_ID, gstServerON = false;
-var web_socket_sign_url = 'wss://'+window.location.host;
+const web_socket_sign_url = 'wss://'+window.location.host;
 
-var configuration = {
-	'iceServers': [{
-		'urls': 'stun:stun.l.google.com:19302'
-	}]
+const configuration = {
+  'iceServers': [{
+    'urls': 'stun:stun.l.google.com:19302'
+  }]
 };
-             
+
+//////// Variables //////////////////////////////////////////////////
+var gstServerON = false;
+var localID, remoteID=GST_SERVER_ID;
+var localStream, pcs = [], wss; 
+
 
 //////////// Media ///////////////////////////////////////////////////////////////////////////////////////////////
 
 function start() {
 
   startButton.disabled = true;
-  
-  createPeerConnection(0);
 
   var constraints = {video: true, audio: false};
 
@@ -44,10 +46,7 @@ function start() {
     console.log("Requesting local media");
     localStream = stream;
 
-    stream.getTracks().forEach(track => pcs[0].addTrack(track, stream));
-
     connectSignServer();
-
   });
 }
 
@@ -126,7 +125,8 @@ function connectSignServer(){
 
       console.log('<<< OFFER '+data.index+' received:'); console.log(data.data);
 
-      if(data.index > 0) createPeerConnection(data.index);
+      if(data.index == 0) createPeerConnection(data.index, localStream);
+      else createPeerConnection(data.index, null);
 
       pcs[data.index].setRemoteDescription(new RTCSessionDescription(data.data));
 
@@ -171,11 +171,12 @@ function connectSignServer(){
   }
 }
 
-function createPeerConnection(index){
+function createPeerConnection(index, stream){
 
   console.log('Creating peer connection '+index);
   pcs[index] = new RTCPeerConnection();
 
+  if(stream != null) stream.getTracks().forEach(track => pcs[index].addTrack(track, stream));
 
   pcs[index].onicecandidate = function(ev){
 
