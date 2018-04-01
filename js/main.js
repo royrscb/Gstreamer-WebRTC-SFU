@@ -56,16 +56,20 @@ function start() {
 
 function negotiate(index){
 
-  negotiateButton.disabled = true;
+  if(localID==undefined) console.log("NOT negotiating for index:"+index+"!");
+  else{
 
-  pcs[index].createOffer().then(function(description){
+    negotiateButton.disabled = true;
 
-    console.log('Setting local description');
-    pcs[index].setLocalDescription(description);
+    pcs[index].createOffer().then(function(description){
 
-    console.log("%c>>>", 'color: red'," negotiating, sending offer:"); console.log(description);
-    wss.send(JSON.stringify({type:"offer", data:description, from:localID, to:remoteID, index:index}));
-  });
+      console.log('Setting local description');
+      pcs[index].setLocalDescription(description);
+
+      console.log("%c>>>", 'color: red'," negotiating, sending offer:"); console.log(description);
+      wss.send(JSON.stringify({type:"offer", data:description, from:localID, to:remoteID, index:index}));
+    });
+  }
 }
 
 function hangup(index){
@@ -188,7 +192,7 @@ function createPeerConnection(index){
     }
   }
 
-  //pcs[index].onnegotiationneeded = function(){negotiate(index);}
+  pcs[index].onnegotiationneeded = function(){negotiate(index);}
 
   pcs[index].ontrack = function(ev){
 

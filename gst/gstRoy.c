@@ -27,6 +27,8 @@ struct Wrbin{
 
   gint ownerPeer;   //id of the peer who owns this wrbin
   gint ownerPipe; //id of the peer who own the pipe where this wrbin is
+
+  gboolean negotiated;
 };
 
 struct Peer{
@@ -35,10 +37,10 @@ struct Peer{
 
   GstElement *pipel;
 
-  struct Wrbin wrbins[5];
   gint nwrbins;
+  struct Wrbin wrbins[16];
+  
 };
-
 
 
 typedef struct UserData{
@@ -51,30 +53,33 @@ typedef struct UserData{
 
 
 /////// Constants ////////////////////////////////////////////////////////////////
-const char* url_sign_server = "wss://127.0.0.1:3434";
+const gchar* url_sign_server = "wss://127.0.0.1:3434";
+const gint MAX_PEERS=8;
+const gint MAX_WRBINS=16;
 
 #define VIDEO_COD "vp8enc ! rtpvp8pay ! queue ! application/x-rtp,media=video,payload=96,encoding-name=VP8"
 #define AUDIO_COD "opusenc ! rtpopuspay ! queue ! application/x-rtp,media=audio,payload=97,encoding-name=OPUS"
 
 // Because callbacks needs pointers 
-userData  tmpUsDa10={ .peerID=1, .index=0 },
-          tmpUsDa11={ .peerID=1, .index=1 }, 
-          tmpUsDa20={ .peerID=2, .index=0 },
-          tmpUsDa21={ .peerID=2, .index=1 };
+userData  constUsDa10={ .peerID=1, .index=0 },
+          constUsDa11={ .peerID=1, .index=1 }, 
+          constUsDa20={ .peerID=2, .index=0 },
+          constUsDa21={ .peerID=2, .index=1 };
 
-userData* getStaticUsDa(gint peerID, gint index){
+userData* getConstUsDa(gint peerID, gint index){
 
   if(peerID == 1){
 
-    if(index == 0) return &tmpUsDa10;
-    else if(index == 1) return &tmpUsDa11;
+    if(index == 0) return &constUsDa10;
+    else if(index == 1) return &constUsDa11;
 
   }else if(peerID == 2){
 
-    if(index == 0) return &tmpUsDa20;
-    else if(index == 1) return &tmpUsDa21;
-  
-  }else g_print("Error requesting usDa");
+    if(index == 0) return &constUsDa20;
+    else if(index == 1) return &constUsDa21;
+  }
+
+  g_print("Error requesting usDa(%i, %i)",peerID, index);
 }
 
 
@@ -82,9 +87,35 @@ userData* getStaticUsDa(gint peerID, gint index){
 static GMainLoop *loop = NULL;
 static SoupWebsocketConnection *ws_conn = NULL;
 
-
 gint npeers=0;
-struct Peer peers[10];
+struct Peer peers[8];
+
+
+
+static void init_peers(){
+
+  int i; 
+  for(i=0; i<MAX_PEERS; i++){ 
+
+    peers[i].id = 99; 
+    peers[i].pipel = NULL;
+    peers[i].nwrbins = 0; 
+
+    int j;
+    for(j=0; j<MAX_WRBINS; j++){
+
+      peers[i].wrbins[j].wrbin = NULL;
+
+      peers[i].wrbins[j].sinkPad = NULL;
+      peers[i].wrbins[j].srcPad = NULL;
+
+      peers[i].wrbins[j].ownerPeer = 99;
+      peers[i].wrbins[j].ownerPipe = 99;
+
+      peers[i].wrbins[j].negotiated = FALSE;
+    }
+  }
+}
 
 
 //////////// JSON functions ///////////////////////////////////////////////////////////////////
@@ -184,8 +215,8 @@ static void on_offer_created(GstPromise * promise, userData *usDa){
   gst_webrtc_session_description_free (offer);
 }
 
-/*
-static void on_answer_created(GstPromise * promise, gpointer wrbin){
+
+static void on_answer_created(GstPromise * promise, userData *usDa){
 
   GstWebRTCSessionDescription *answer = NULL;
   const GstStructure *reply;
@@ -200,7 +231,7 @@ static void on_answer_created(GstPromise * promise, gpointer wrbin){
   gchar *sdp = gst_sdp_message_as_text(answer->sdp);
   g_print ("Setting local desc(answer) and sending created answer:\n%s\n", sdp);
 
-  g_signal_emit_by_name (wrbin, "set-local-description", answer, NULL);
+  g_signal_emit_by_name (peers[usDa->peerID].wrbins[usDa->index].wrbin , "set-local-description", answer, NULL);
 
 
   JsonObject *data = json_object_new();
@@ -208,14 +239,17 @@ static void on_answer_created(GstPromise * promise, gpointer wrbin){
   json_object_set_string_member(data, "sdp", sdp);
   g_free(sdp);
 
-  send_data_to("answer", 99, data, 99);
+  send_data_to("answer", data, usDa->peerID, usDa->index);
 
   json_object_unref(data);
   gst_webrtc_session_description_free(answer);
 }
-*/
+
  
 static void negotiate(GstPromise *promise, userData *usDa){
+
+  if(peers[usDa->peerID].wrbins[usDa->index].negotiated) g_print("Negotiation with:%i for webrtcbin:%i already done\n", usDa->peerID, usDa->index);
+  else{
 
     g_print("Negotiate with:%i for webrtcbin:%i\n", usDa->peerID, usDa->index);
 
@@ -224,6 +258,7 @@ static void negotiate(GstPromise *promise, userData *usDa){
 
     prom = gst_promise_new_with_change_func((GstPromiseChangeFunc) on_offer_created, usDa, NULL);
     g_signal_emit_by_name (peers[usDa->peerID].wrbins[usDa->index].wrbin, "create-offer", NULL, prom);
+  }
 }
 
 
@@ -305,25 +340,22 @@ static void on_pad_added(GstElement *webrtc, GstPad *new_pad, userData *usDa){
 
 
     // Getting the webrtcbin to store it and set signal pads
-    struct Wrbin new_wrbin;
-    new_wrbin.wrbin = gst_bin_get_by_name(GST_BIN (outBin), "newBin");
-    new_wrbin.sinkPad = sinkPad;
-    new_wrbin.ownerPeer = peer2conn;
-    new_wrbin.ownerPipe = pipe2connOwner; 
-
     gint newWrbinIndex = peers[peer2conn].nwrbins; 
 
-    peers[peer2conn].wrbins[newWrbinIndex] = new_wrbin;
+    peers[peer2conn].wrbins[newWrbinIndex].wrbin = gst_bin_get_by_name(GST_BIN (outBin), "newBin");
+    peers[peer2conn].wrbins[newWrbinIndex].sinkPad = sinkPad;
+    peers[peer2conn].wrbins[newWrbinIndex].ownerPeer = peer2conn;
+    peers[peer2conn].wrbins[newWrbinIndex].ownerPipe = pipe2connOwner; 
+    
     peers[peer2conn].nwrbins++;
 
 
     // Connect signals and goes to play
-    userData *usDa2 = getStaticUsDa(peer2conn, newWrbinIndex);
+    userData *usDa2 = getConstUsDa(peer2conn, newWrbinIndex);
 
     set_wrbin_pads(usDa2);
 
     gst_element_sync_state_with_parent(outBin);
-
     
   }else fake_link_srcpad(webrtc, new_pad, usDa);
 }
@@ -347,20 +379,19 @@ static GstElement* start_pipeline(userData *usDa){
   if (error) { g_printerr("Failed to parse launch: %s\n", error->message); g_error_free(error); }
     
   peers[usDa->peerID].pipel = new_pipe;
-
-  struct Wrbin new_wrbin;  
-  new_wrbin.wrbin = gst_bin_get_by_name(GST_BIN (new_pipe), "newBin");
-  new_wrbin.ownerPeer = usDa->peerID;
-  new_wrbin.ownerPipe = usDa->peerID;
-
-  peers[usDa->peerID].wrbins[usDa->index] = new_wrbin; //index here will allways be 0 due the pipeline is starting.
+  peers[usDa->peerID].wrbins[usDa->index].wrbin = gst_bin_get_by_name(GST_BIN (new_pipe), "newBin");
+  peers[usDa->peerID].wrbins[usDa->index].ownerPeer = usDa->peerID;
+  peers[usDa->peerID].wrbins[usDa->index].ownerPipe = usDa->peerID;
   peers[usDa->peerID].nwrbins++;
 
   set_wrbin_pads(usDa);
 
-  g_print ("Starting pipeline for peer: %i\n", usDa->peerID );
+  g_print ("Starting pipeline for peer: %i\n", usDa->peerID);
   gst_element_set_state (GST_ELEMENT (new_pipe), GST_STATE_PLAYING);
 }
+
+
+
 /////// Signalling server connection ///////////////////////////////////////////////////////////
 
 static void on_sign_message(SoupWebsocketConnection *ws_conn, SoupWebsocketDataType dataType, GBytes *message, gpointer user_data){
@@ -398,12 +429,9 @@ static void on_sign_message(SoupWebsocketConnection *ws_conn, SoupWebsocketDataT
     g_print("^^^ New conected %i = %s\n",id,ip);
 
 
-    userData *usDa = getStaticUsDa(id, 0);
+    userData *usDa = getConstUsDa(id, 0);
 
-    struct Peer new_peer;
-    new_peer.id = id;
-    new_peer.nwrbins = 0;
-    peers[id] = new_peer;
+    peers[id].id = id; //init peer
     npeers++;
    
     start_pipeline(usDa);
@@ -416,41 +444,70 @@ static void on_sign_message(SoupWebsocketConnection *ws_conn, SoupWebsocketDataT
     const gint id = json_object_get_int_member(data_data, "id");
     const gchar *ip = json_object_get_string_member(data_data, "ip");
 
-    peers[id].id=99;
+    peers[id].id = 99; 
+    peers[id].pipel = NULL;
+    peers[id].nwrbins = 0; 
+
+    int j;
+    for(j=0; j<MAX_WRBINS; j++){
+
+      peers[id].wrbins[j].wrbin = NULL;
+
+      peers[id].wrbins[j].sinkPad = NULL;
+      peers[id].wrbins[j].srcPad = NULL;
+
+      peers[id].wrbins[j].ownerPeer = 99;
+      peers[id].wrbins[j].ownerPipe = 99;
+
+      peers[id].wrbins[j].negotiated = FALSE;
+    }
 
     if(npeers>0) npeers--;
 
 
     g_print("vvv Disconected %i = %s\n",id,ip);
 
-  }else if(g_strcmp0(type, "offer")==0){
+  }else if(g_strcmp0(type, "offer")==0){//only happend if the browser peer is online before turn on gst server
 
-    JsonObject *of = json_object_get_object_member(data, "data");
-    const gchar *sdpText = json_object_get_string_member(of, "sdp");
+    if(peers[from].id != 99) g_print("Offer from peer:%i with index:%i but peer has already registered!", from, index);
+    else{
 
-    g_print("OFFER received: %s\n", json_stringify(of));
+      JsonObject *of = json_object_get_object_member(data, "data");
+      const gchar *sdpText = json_object_get_string_member(of, "sdp");
+
+      g_print("OFFER received: %s\n", json_stringify(of));
+
+      userData *usDa = getConstUsDa(from, index); //this index must be 0
+
+      peers[from].id = from; //init peer
+      npeers++;
+
+      peers[from].wrbins[index].negotiated = TRUE;
+      start_pipeline(usDa);
+
+      
+      GstSDPMessage *sdp;
+      gst_sdp_message_new(&sdp);
+      gst_sdp_message_parse_buffer(sdpText, strlen(sdpText), sdp);
+
+      GstWebRTCSessionDescription *offer;
+      offer = gst_webrtc_session_description_new(GST_WEBRTC_SDP_TYPE_OFFER, sdp);
+      g_signal_emit_by_name (peers[from].wrbins[index].wrbin, "set-remote-description", offer, NULL);
+
+      
+      //creating the answer
+      GstPromise *promise;
     
-    GstSDPMessage *sdp;
-    gst_sdp_message_new(&sdp);
-    gst_sdp_message_parse_buffer(sdpText, strlen(sdpText), sdp);
-
-    GstWebRTCSessionDescription *offer;
-    offer = gst_webrtc_session_description_new(GST_WEBRTC_SDP_TYPE_OFFER, sdp);
-    //*****g_signal_emit_by_name (TO_DO, "set-remote-description", offer, NULL);
-
-    
-    //creating the answer
-    GstPromise *promise;
-  
-    //*****promise = gst_promise_new_with_change_func(on_answer_created, user_data, NULL);
-    //*****g_signal_emit_by_name (TO_DO, "create-answer", NULL, promise);
+      promise = gst_promise_new_with_change_func((GstPromiseChangeFunc) on_answer_created, usDa, NULL);
+      g_signal_emit_by_name (peers[from].wrbins[index].wrbin , "create-answer", NULL, promise);
+    }
         
   }else if(g_strcmp0(type, "answer")==0){
 
     JsonObject *ans = json_object_get_object_member(data, "data");
     const gchar *sdpText = json_object_get_string_member(ans, "sdp");
 
-    g_print("Answer:\n%s\n", sdpText);
+    g_print("Answer received:\n%s\n", sdpText);
 
 
     GstSDPMessage *sdp;
@@ -517,9 +574,10 @@ static void connect_webSocket_signServer(){
 }
 
 
-int main(int argc, char *argv[]){ int i; for(i=0; i<10; i++) peers[i].id = 99;
+int main(int argc, char *argv[]){ 
 
   gst_init (&argc, &argv);
+  init_peers();
   g_print("Gst Server running\n");
 
   connect_webSocket_signServer();
