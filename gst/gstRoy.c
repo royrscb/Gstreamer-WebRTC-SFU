@@ -16,6 +16,7 @@
 #include <string.h>
 
 
+
 /////// Structs //////////////////////////////////////////////////////////////////
 struct Wrbin{
 
@@ -338,7 +339,7 @@ static void set_wrbin_pads(userData *usDa){
 
 /////// Pipeline ///////////
 
-GstElement* start_pipeline(userData *usDa){
+static GstElement* start_pipeline(userData *usDa){
 
   GError *error = NULL;
 
