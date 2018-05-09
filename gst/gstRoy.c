@@ -92,12 +92,16 @@ struct Peer peers[8];
 
 
 
-static void init_peers(){
+static void init_peers(int id){
 
-  int i; 
-  for(i=0; i<MAX_PEERS; i++){ 
+  int i = 0, times = MAX_PEERS;
+
+  if(id > -1){ i=id; times=id+1; }
+
+  for(i=0; i<times; i++){ 
 
     peers[i].id = 99; 
+    if(id > -1) gst_object_unref(peers[id].pipel);
     peers[i].pipel = NULL;
     peers[i].nwrbins = 0; 
 
@@ -264,6 +268,7 @@ static void negotiate(GstPromise *promise, userData *usDa){
 
 
 ////////// PADS ////////////////////////////////////////////////////////////////////
+
 static void set_wrbin_pads(userData *usDa);
 
 static void fake_link_srcpad(GstElement *webrtc, GstPad *new_pad, userData *usDa){
@@ -436,7 +441,7 @@ static void on_sign_message(SoupWebsocketConnection *ws_conn, SoupWebsocketDataT
    
     start_pipeline(usDa);
 
-    //negotiate(usDa);
+    //negotiate(usDa); is no needed because is already fired when pipeline goes to play state
 
   }else if(g_strcmp0(type, "socketOFF")==0){
 
@@ -444,23 +449,7 @@ static void on_sign_message(SoupWebsocketConnection *ws_conn, SoupWebsocketDataT
     const gint id = json_object_get_int_member(data_data, "id");
     const gchar *ip = json_object_get_string_member(data_data, "ip");
 
-    peers[id].id = 99; 
-    peers[id].pipel = NULL;
-    peers[id].nwrbins = 0; 
-
-    int j;
-    for(j=0; j<MAX_WRBINS; j++){
-
-      peers[id].wrbins[j].wrbin = NULL;
-
-      peers[id].wrbins[j].sinkPad = NULL;
-      peers[id].wrbins[j].srcPad = NULL;
-
-      peers[id].wrbins[j].ownerPeer = 99;
-      peers[id].wrbins[j].ownerPipe = 99;
-
-      peers[id].wrbins[j].negotiated = FALSE;
-    }
+    init_peers(id);
 
     if(npeers>0) npeers--;
 
@@ -540,6 +529,7 @@ static void on_sign_message(SoupWebsocketConnection *ws_conn, SoupWebsocketDataT
 static void on_sign_closed (SoupWebsocketConnection *ws_conn, gpointer user_data){
 
   g_print("websocket closed\n");
+  init_peers(-1);
   g_main_loop_quit(loop);
 }
 
@@ -577,7 +567,7 @@ static void connect_webSocket_signServer(){
 int main(int argc, char *argv[]){ 
 
   gst_init (&argc, &argv);
-  init_peers();
+  init_peers(-1);
   g_print("Gst Server running\n");
 
   connect_webSocket_signServer();

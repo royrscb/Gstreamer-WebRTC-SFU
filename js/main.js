@@ -192,7 +192,6 @@ function createPeerConnection(index){
     if (ev.candidate){
 
       console.log("Sending candidate: "+index); console.log(ev.candidate);
-
       wss.send(JSON.stringify({type:"candidate", data:ev.candidate, from: localID, to:remoteID, index:index}));
     }
   }
@@ -212,35 +211,38 @@ function createPeerConnection(index){
 
 
 /////////// Send text //////////////////////////////////
-const inputSend = document.getElementById("inputSend");
-inputSend.addEventListener("keyup", function(event) {
-  if (localID!=undefined && event.key === "Enter") {
+document.getElementById('formSend').addEventListener('submit', function(e){e.preventDefault();
       
-      var txt = inputSend.value;
-      inputSend.value = '';
+  var input = document.getElementById('inputSend');
 
-      var isTxt = txt[0]!="{";
-   
+  var txt = input.value;
 
-      if(isTxt){ 
+  if(localID!=undefined && txt!=""){
 
-        var to = BROADCAST;
+    input.value = '';
 
-        if(!isNaN(txt[0])) { to=txt[0]; txt = txt.substring(1,txt.length); }
+    var isTxt = txt[0]!="{";
 
-        console.log('%c>>>', 'color: red','Type:txt from:'+localID+' to:'+to); 
-        console.log(txt);
-        
-        wss.send(JSON.stringify({type:"txt", data:txt, from:localID, to:to })); 
 
-      }else{
+    if(isTxt){ 
 
-        var data = JSON.parse(txt);
+      var to = BROADCAST;
 
-        console.log('%c>>>', 'color: red','Type:'+data.type+' from:'+data.from+' to:'+data.to+' index:'+data.index); 
-        console.log(data.data);
-        
-        wss.send(txt);
-      }
-  }
+      if(!isNaN(txt[0])) { to=txt[0]; txt = txt.substring(1,txt.length); }
+
+      console.log('%c>>>', 'color: red','Type:txt from:'+localID+' to:'+to); 
+      console.log(txt);
+      
+      wss.send(JSON.stringify({type:"txt", data:txt, from:localID, to:to })); 
+
+    }else{
+
+      var data = JSON.parse(txt);
+
+      console.log('%c>>>', 'color: red','Type:'+data.type+' from:'+data.from+' to:'+data.to+' index:'+data.index); 
+      console.log(data.data);
+      
+      wss.send(txt);
+    }
+  }else console.log("ERROR sending message");
 });

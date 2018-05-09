@@ -6,11 +6,36 @@
 }
 
 {
+	type :"id",
+	data : "4"
+	from: "-1",
+	to: "4"
+}
+
+
+{
 	type :"gstServerON",
-	data : "this is an example of txt broadcast!"
-	from: "0",
+	data : "Gst server active!"
+	from: "-1",
 	to: "-2"
 }
+
+{
+	type :"socketON",
+	data : {	id: 3,
+				ip: "23.12.43.54"},
+	from: "-1",
+	to: "-2"
+}
+
+{
+	type :"socketOFF",
+	data : {	id: 2,
+				ip: "23.32.43.54"},
+	from: "-1",
+	to: "-2"
+}
+
 
 {
 	type :"offer",
