@@ -1,7 +1,7 @@
-/*  
+/*
  * Author: Roy Ros Cobo
  *
- * $ gcc gstRoy.c $(pkg-config --cflags --libs gstreamer-webrtc-1.0 gstreamer-sdp-1.0 libsoup-2.4 json-glib-1.0) -o gstRoy
+ * $ gcc gst.c $(pkg-config --cflags --libs gstreamer-webrtc-1.0 gstreamer-sdp-1.0 libsoup-2.4 json-glib-1.0) -o gst
 */
 
 #include <gst/gst.h>
@@ -61,22 +61,47 @@ const gint MAX_WRBINS=16;
 #define AUDIO_COD "opusenc ! rtpopuspay ! queue ! application/x-rtp,media=audio,payload=97,encoding-name=OPUS"
 
 // Because callbacks needs pointers 
-userData  constUsDa10={ .peerID=1, .index=0 },
-          constUsDa11={ .peerID=1, .index=1 }, 
-          constUsDa20={ .peerID=2, .index=0 },
-          constUsDa21={ .peerID=2, .index=1 };
+userData  
+          constUsDa10={ .peerID=1, .index=0 }, constUsDa11={ .peerID=1, .index=1 }, constUsDa12={ .peerID=1, .index=2 }, constUsDa13={.peerID=1, .index=3},
+          constUsDa20={ .peerID=2, .index=0 }, constUsDa21={ .peerID=2, .index=1 }, constUsDa22={ .peerID=2, .index=2 }, constUsDa23={.peerID=2, .index=3},
+          constUsDa30={ .peerID=3, .index=0 }, constUsDa31={ .peerID=3, .index=1 }, constUsDa32={ .peerID=3, .index=2 }, constUsDa33={.peerID=3, .index=3},
+          constUsDa40={ .peerID=4, .index=0 }, constUsDa41={ .peerID=4, .index=1 }, constUsDa42={ .peerID=4, .index=2 }, constUsDa43={.peerID=4, .index=3};
 
 userData* getConstUsDa(gint peerID, gint index){
 
-  if(peerID == 1){
+  switch(peerID){
 
-    if(index == 0) return &constUsDa10;
-    else if(index == 1) return &constUsDa11;
+    case 1: switch(index){
 
-  }else if(peerID == 2){
+      case 0: return &constUsDa10;
+      case 1: return &constUsDa11;
+      case 2: return &constUsDa12;
+      case 3: return &constUsDa13;
+    }
 
-    if(index == 0) return &constUsDa20;
-    else if(index == 1) return &constUsDa21;
+    case 2: switch(index){
+
+      case 0: return &constUsDa20;
+      case 1: return &constUsDa21;
+      case 2: return &constUsDa22;
+      case 3: return &constUsDa23;
+    }
+    
+    case 3: switch(index){
+
+      case 0: return &constUsDa30;
+      case 1: return &constUsDa31;
+      case 2: return &constUsDa32;
+      case 3: return &constUsDa33;
+    }
+
+    case 4: switch(index){
+
+      case 0: return &constUsDa40;
+      case 1: return &constUsDa41;
+      case 2: return &constUsDa42;
+      case 3: return &constUsDa43;
+    }
   }
 
   g_print("Error requesting usDa(%i, %i)",peerID, index);
@@ -84,6 +109,7 @@ userData* getConstUsDa(gint peerID, gint index){
 
 
 //////// Variables ///////////////////////////////////////////////////////////////
+
 static GMainLoop *loop = NULL;
 static SoupWebsocketConnection *ws_conn = NULL;
 
@@ -94,14 +120,14 @@ struct Peer peers[8];
 
 static void init_peers(int id){
 
-  int i = 0, times = MAX_PEERS;
+  int i, times = MAX_PEERS;
 
-  if(id > -1){ i=id; times=id+1; }
+  if(id > 0) times=id+1; 
 
-  for(i=0; i<times; i++){ 
+  for(i=id; i<times; i++){ 
 
     peers[i].id = 99; 
-    if(id > -1) gst_object_unref(peers[id].pipel);
+    if(id > 0) gst_object_unref(peers[i].pipel);
     peers[i].pipel = NULL;
     peers[i].nwrbins = 0; 
 
@@ -159,7 +185,7 @@ static JsonObject* json_parse(gchar *msg){
 }
 
 
-void send_data_to(gchar *type, JsonObject *dataData, gint to, gint index){
+static void send_data_to(gchar *type, JsonObject *dataData, gint to, gint index){
 
   JsonObject *data;
 
@@ -376,7 +402,7 @@ static void set_wrbin_pads(userData *usDa){
 
 /////// Pipeline ///////////
 
-static GstElement* start_pipeline(userData *usDa){
+static void start_pipeline(userData *usDa){
 
   GError *error = NULL;
 
@@ -440,8 +466,6 @@ static void on_sign_message(SoupWebsocketConnection *ws_conn, SoupWebsocketDataT
     npeers++;
    
     start_pipeline(usDa);
-
-    //negotiate(usDa); is no needed because is already fired when pipeline goes to play state
 
   }else if(g_strcmp0(type, "socketOFF")==0){
 
@@ -529,7 +553,6 @@ static void on_sign_message(SoupWebsocketConnection *ws_conn, SoupWebsocketDataT
 static void on_sign_closed (SoupWebsocketConnection *ws_conn, gpointer user_data){
 
   g_print("websocket closed\n");
-  init_peers(-1);
   g_main_loop_quit(loop);
 }
 
@@ -567,7 +590,7 @@ static void connect_webSocket_signServer(){
 int main(int argc, char *argv[]){ 
 
   gst_init (&argc, &argv);
-  init_peers(-1);
+  init_peers(0);
   g_print("Gst Server running\n");
 
   connect_webSocket_signServer();
@@ -581,6 +604,7 @@ int main(int argc, char *argv[]){
 
   //exit functions
 
+  init_peers(0);
   g_object_unref(ws_conn);
   g_main_loop_unref(loop);
 
