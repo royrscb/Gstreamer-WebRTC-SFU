@@ -27,7 +27,7 @@ const configuration = {
 };
 
 //////// Variables //////////////////////////////////////////////////
-var gstServerON = false;
+var gstServerON = false, useVideoTest = true;
 var localID, remoteID=GST_SERVER_ID;
 var localStream, pcs = [], wss; 
 
@@ -40,18 +40,30 @@ function start() {
   
   createPeerConnection(0);
 
-  var constraints = {video: true, audio: false};
+  if(useVideoTest){
 
-  // Add local stream
-  navigator.mediaDevices.getUserMedia(constraints).then(function(stream){ 
+  	localVideo.setAttribute('src', "videoTests/test.mp4");
+  	localVideo.setAttribute('type',"video/mp4");
+  	localVideo.play().then(function(){
 
-    console.log("Requesting local media");
-    localStream = stream;
+	  	localStream = localVideo.captureStream();
 
-    stream.getTracks().forEach(track => pcs[0].addTrack(track, stream));
+	  	localStream.getTracks().forEach(track => pcs[0].addTrack(track, localStream));
 
-    connectSignServer();
-  });
+		connectSignServer();
+	});
+
+  }else navigator.mediaDevices.getUserMedia({video: true, audio: false}).then(function(stream){ 
+
+	    console.log("Requesting local media");
+	    localStream = stream;
+
+	    localVideo.srcObject = localStream;
+
+	    localStream.getTracks().forEach(track => pcs[0].addTrack(track, localStream));
+
+	    connectSignServer();
+	  });
 }
 
 function negotiate(index){

@@ -1,7 +1,7 @@
 /*
  * Author: Roy Ros Cobo
  *
- * $ gcc gst.c $(pkg-config --cflags --libs gstreamer-webrtc-1.0 gstreamer-sdp-1.0 libsoup-2.4 json-glib-1.0) -o gst
+ * $ gcc gstPlay.c $(pkg-config --cflags --libs gstreamer-webrtc-1.0 gstreamer-sdp-1.0 libsoup-2.4 json-glib-1.0) -o gstPlay
 */
 
 #include <gst/gst.h>
