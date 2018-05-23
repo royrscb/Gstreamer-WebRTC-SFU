@@ -14,20 +14,22 @@
 
       
       <p>Local and SFU test videos:</p>  
-      <video id="localVideo" width="30%" height="30%" style="display: inline;"></video>
+      <video id="localVideo" width="30%" height="30%" loop style="display: inline;"></video>
       <video id="remoteVideo" autoplay width="25%" height="25%" style="display: inline"></video>
 
       <p id="sineVideo1" style="margin: 0px;"></p>
-      <video id="remoteVideo2" autoplay width="50%" height="50%" style="display: none"></video>
+      <video id="remoteVideo2" autoplay loop width="50%" height="50%" style="display: none"></video>
 
       <p id="sineVideo2" style="margin: 0px;"></p>
-      <video id="remoteVideo3" autoplay width="50%" height="50%" style="display: none"></video>
+      <video id="remoteVideo3" autoplay loop width="50%" height="50%" style="display: none"></video>
     </div><br><br>
 
     <div id="buttons">
-      <button id="startButton" style="height: 60px; width: 110px;">Start</button>
-      <button id="negotiateButton" disabled="true">Negotiate</button>
-      <button id="hangupButton" disabled="true">Hang up</button>
+      <input type="radio" id="selTest" name="streamSel" checked>Use test stream
+      <input type="radio" id="selCam" name="streamSel">Use camera<br>
+      <button id="startButton" style="height: 60px; width: 110px;">Get stream</button>
+      <button id="signButton" disabled="true" style="height: 60px; width: 110px;">Connect sign server</button>
+      <button id="negotiateButton" disabled="true" style="height: 60px; width: 110px;">Negotiate</button>
     </div><br>
 
 

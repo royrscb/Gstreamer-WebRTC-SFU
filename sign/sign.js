@@ -98,7 +98,9 @@ wss.on('connection', function(socket, req) {
 
 
     console.log("----------------------------------------------------------------");
-    console.log("Message type:"+data.type+" from:"+data.from+" to:"+data.to+ " index:"+data.index); console.log(data.data);
+    var from=data.from, to=data.to; 
+    if(from==0) from="SFU"; if(to==0) to="SFU";
+    console.log("Message type:"+data.type+" from:"+from+" to:"+to+ " index:"+data.index); //console.log(data.data);
 
     if(data.to>=0 && sockets[data.to]!=undefined) sockets[data.to].socket.send(msg);
     else if(data.to==SIGNALLING_SERVER_ID);
