@@ -198,7 +198,7 @@ static void send_data_to(gchar *type, JsonObject *dataData, gint to, gint index)
 
   soup_websocket_connection_send_text(ws_conn, json_stringify(data));
 
-  g_print(">>> Type:%s to:%i index:%i data: \n%s\n",type, to, index, json_stringify(dataData));
+  if(type != "candidate") g_print(">>> Type:%s to:%i index:%i data: \n%s\n",type, to, index, json_stringify(dataData));
 }
 
 
@@ -355,7 +355,7 @@ static void start_pipeline(userData *usDa){
 
   GError *error = NULL;
 
-  GstElement * new_pipe = gst_parse_launch ("videotestsrc pattern=smpte ! queue ! "VIDEO_COD" ! webrtcbin name=newBin ", &error);
+  GstElement * new_pipe = gst_parse_launch ("videotestsrc pattern=pinwheel ! queue ! "VIDEO_COD" ! webrtcbin name=newBin ", &error);
   if (error) { g_printerr("Failed to parse launch: %s\n", error->message); g_error_free(error); }
     
   peers[usDa->peerID].pipel = new_pipe;
@@ -488,7 +488,7 @@ static void on_sign_message(SoupWebsocketConnection *ws_conn, SoupWebsocketDataT
     //const gchar *sdpMid = json_object_get_string_member(ice, "sdpMid");
     gint sdpMLineIndex = json_object_get_int_member(ice, "sdpMLineIndex");
 
-    g_print("%s\n", candidate);
+    //g_print("%s\n", candidate);
 
     g_signal_emit_by_name (peers[from].wrbins[index].wrbin, "add-ice-candidate", sdpMLineIndex, candidate);
     

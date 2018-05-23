@@ -4,6 +4,7 @@ var localVideo = document.getElementById("localVideo");
 var remoteVideos = [];
 remoteVideos[0] = document.getElementById("remoteVideo");
 remoteVideos[1] = document.getElementById("remoteVideo2");
+remoteVideos[2] = document.getElementById("remoteVideo3");
 
 var startButton = document.getElementById("startButton");
 var negotiateButton = document.getElementById("negotiateButton");
@@ -40,20 +41,8 @@ function start() {
   
   createPeerConnection(0);
 
-  if(useVideoTest){
-
-  	localVideo.setAttribute('src', "videoTests/test.mp4");
-  	localVideo.setAttribute('type',"video/mp4");
-  	localVideo.play().then(function(){
-
-	  	localStream = localVideo.captureStream();
-
-	  	localStream.getTracks().forEach(track => pcs[0].addTrack(track, localStream));
-
-		connectSignServer();
-	});
-
-  }else navigator.mediaDevices.getUserMedia({video: true, audio: false}).then(function(stream){ 
+  if(useVideoTest) connectSignServer();
+  else navigator.mediaDevices.getUserMedia({video: true, audio: false}).then(function(stream){ 
 
 	    console.log("Requesting local media");
 	    localStream = stream;
@@ -111,12 +100,11 @@ function connectSignServer(){
   console.log("Connecting to the signalling server");
   wss = new WebSocket(web_socket_sign_url);
 
-
   wss.onmessage = function(msg){
 
     var data = JSON.parse(msg.data);
 
-    console.log("------------------------------------------");
+    //console.log("------------------------------------------");
     console.log("%c<<< ", 'color: green', "Type:"+data.type+" from:"+data.from+" to:"+data.to+" index:"+data.index);
 
     if(data.type=="txt") console.log(data.data);
@@ -126,6 +114,25 @@ function connectSignServer(){
       document.getElementById("id").innerHTML = "ID: "+localID;
 
       console.log('%c My id is:'+localID+' ', 'background: black; color: white');
+
+
+      if(useVideoTest){
+
+        if(localID == 1)localVideo.setAttribute('src', "videoTests/smpte.mp4");
+        else if(localID == 2) localVideo.setAttribute('src', "videoTests/ball.mp4");
+        else if(localID == 3) localVideo.setAttribute('src', "videoTests/snow.mp4");
+
+        localVideo.setAttribute('type',"video/mp4");
+        localVideo.play().then(function(){
+
+          localStream = localVideo.captureStream();
+
+          localStream.getTracks().forEach(track => pcs[0].addTrack(track, localStream));
+
+          wss.send(JSON.stringify({type :"socketON",data : {id: localID, ip: "p"},from: localID, to: "0"}));
+
+        });
+      }
 
     }else if(data.type=="gstServerON"){
 
@@ -168,7 +175,7 @@ function connectSignServer(){
 
     }else if(data.type=="candidate"){
 
-      console.log(data.data);
+      //console.log(data.data);
 
       pcs[data.index].addIceCandidate(new RTCIceCandidate(data.data));
 
@@ -208,12 +215,17 @@ function createPeerConnection(index){
     }
   }
 
-  pcs[index].onnegotiationneeded = function(){negotiate(index);}
+  //pcs[index].onnegotiationneeded = function(){negotiate(index);}
 
   pcs[index].ontrack = function(ev){
 
     remoteVideos[index].srcObject = ev.streams[0];
-    
+
+    if(index > 0){
+
+      document.getElementById('sineVideo'+index).innerHTML = "Remote video: "+index;
+      remoteVideos[index].style.display = "initial";
+    }
 
     negotiateButton.disabled = true;
     hangupButton.disabled = false;
