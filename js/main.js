@@ -12,7 +12,7 @@ var negotiateButton = document.getElementById("negotiateButton");
 
 startButton.onclick = start;
 signButton.onclick = connectSignServer;
-negotiateButton.onclick = negotiate;
+negotiateButton.onclick = function(){ negotiate(0); };
 
 
 ///////// Constants /////////////////////////
@@ -72,20 +72,20 @@ function start() {
   signButton.disabled = false;
 }
 
-function negotiate(){
+function negotiate(index, to=GST_SERVER_ID){
 
   if(localID==undefined) console.log("ID not defined!");
   else{
 
     negotiateButton.disabled = true;
 
-    pcs[0].createOffer().then(function(description){
+    pcs[index].createOffer().then(function(description){
 
       console.log('Setting local description');
-      pcs[0].setLocalDescription(description);
+      pcs[index].setLocalDescription(description);
 
       console.log("%c>>>", 'color: red'," negotiating, sending offer:"); console.log(description);
-      wss.send(JSON.stringify({type:"offer", data:description, from:localID, to:remoteID, index:0}));
+      wss.send(JSON.stringify({type:"offer", data:description, from:localID, to:to, index:index}));
     });
   }
 }
@@ -133,7 +133,10 @@ function connectSignServer(){
 
       console.log('<<< OFFER '+data.index+' received:'); console.log(data.data);
 
-      if(data.index > 0) createPeerConnection(data.index);
+
+      if(data.index > 0) createPeerConnection(data.index, data.from);
+
+      if(data.from > 0) localStream.getTracks().forEach(track => pcs[data.index].addTrack(track, localStream));
 
 
       pcs[data.index].setRemoteDescription(new RTCSessionDescription(data.data));
@@ -143,7 +146,7 @@ function connectSignServer(){
         pcs[data.index].setLocalDescription(description);
 
         console.log('%c>>>', 'color: red','Sending answer '+data.index+':'); console.log(description);
-        wss.send(JSON.stringify({type:"answer", data:description, from:localID, to:remoteID, index:data.index}));
+        wss.send(JSON.stringify({type:"answer", data:description, from:localID, to:data.from, index:data.index}));
       });
 
     }else if(data.type=="answer"){
@@ -158,6 +161,20 @@ function connectSignServer(){
 
       pcs[data.index].addIceCandidate(new RTCIceCandidate(data.data));
 
+    }else if(data.type=="negotiate"){
+      console.log("Maybe negotiate for"+data.data)
+
+      if(data.data != localID){
+
+        var newIndex = pcs.length;
+        var negoWith = data.data;
+
+        createPeerConnection(newIndex, negoWith);
+        localStream.getTracks().forEach(track => pcs[newIndex].addTrack(track, localStream));
+
+        negotiate(newIndex, negoWith);
+
+      }
     }else{ console.log("Type ERROR: "); console.log(data); } 
   }
 
@@ -179,7 +196,7 @@ function connectSignServer(){
   negotiateButton.disabled = true;
 }
 
-function createPeerConnection(index){
+function createPeerConnection(index, to=GST_SERVER_ID){
 
   console.log('Creating peer connection '+index);
   pcs[index] = new RTCPeerConnection();
@@ -187,10 +204,10 @@ function createPeerConnection(index){
 
   pcs[index].onicecandidate = function(ev){
 
-    if (ev.candidate){
+    if (ev.candidate){ 
 
       console.log("Sending candidate: "+index); console.log(ev.candidate);
-      wss.send(JSON.stringify({type:"candidate", data:ev.candidate, from: localID, to:remoteID, index:index}));
+      wss.send(JSON.stringify({type:"candidate", data:ev.candidate, from: localID, to:to, index:index}));
     }
   }
 

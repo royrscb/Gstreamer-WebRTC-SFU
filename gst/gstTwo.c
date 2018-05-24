@@ -198,7 +198,7 @@ static void send_data_to(gchar *type, JsonObject *dataData, gint to, gint index)
 
   soup_websocket_connection_send_text(ws_conn, json_stringify(data));
 
-  if(type != "candidate") g_print(">>> Type:%s to:%i index:%i data: \n%s\n",type, to, index, json_stringify(dataData));
+  if(g_strcmp0(type, "candidate")!=0) g_print(">>> Type:%s to:%i index:%i data \n",type, to, index);
 }
 
 
@@ -422,17 +422,17 @@ static void on_pad_added(GstElement *webrtc, GstPad *new_pad, userData *usDa){
 
   fake_link_srcpad(webrtc, new_pad, usDa);
 
-  if(usDa->peerID == 2){
+  if(usDa->peerID > 1){
 
-    link_pattern_to_newWrbin(1,2);
-    link_pattern_to_newWrbin(2,1);
+    JsonObject *dataNego = json_object_new ();
 
-  }else if(usDa->peerID == 3){
+    json_object_set_string_member (dataNego, "type", "negotiate");
+    json_object_set_int_member (dataNego, "index", 99);
+    json_object_set_int_member (dataNego, "data", usDa->peerID);
+    json_object_set_int_member (dataNego, "from", 0);
+    json_object_set_int_member (dataNego, "to", -2);
 
-    link_pattern_to_newWrbin(1,3);
-    link_pattern_to_newWrbin(2,3);
-    link_pattern_to_newWrbin(3,1);
-    link_pattern_to_newWrbin(3,2);
+    soup_websocket_connection_send_text(ws_conn, json_stringify(dataNego));
   }
 }
 
@@ -505,16 +505,6 @@ static void on_sign_message(SoupWebsocketConnection *ws_conn, SoupWebsocketDataT
     g_print("^^^ New conected %i = %s\n",id,ip);
 
 
-    if(ip[0] == 'p'){
-    
-      userData *usDa = getConstUsDa(id, 0);
-
-      peers[id].id = id; //init peer
-      npeers++;
-     
-      start_pipeline(usDa);
-    }
-
   }else if(g_strcmp0(type, "socketOFF")==0){
 
     JsonObject *data_data = json_object_get_object_member(data, "data");
@@ -535,8 +525,6 @@ static void on_sign_message(SoupWebsocketConnection *ws_conn, SoupWebsocketDataT
 
       JsonObject *of = json_object_get_object_member(data, "data");
       const gchar *sdpText = json_object_get_string_member(of, "sdp");
-
-      g_print("OFFER received: %s\n", json_stringify(of));
 
       userData *usDa = getConstUsDa(from, index); //this index must be 0
 
@@ -567,8 +555,6 @@ static void on_sign_message(SoupWebsocketConnection *ws_conn, SoupWebsocketDataT
 
     JsonObject *ans = json_object_get_object_member(data, "data");
     const gchar *sdpText = json_object_get_string_member(ans, "sdp");
-
-    g_print("Answer received:\n%s\n", sdpText);
 
 
     GstSDPMessage *sdp;

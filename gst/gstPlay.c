@@ -198,7 +198,7 @@ static void send_data_to(gchar *type, JsonObject *dataData, gint to, gint index)
 
   soup_websocket_connection_send_text(ws_conn, json_stringify(data));
 
-  g_print(">>> Type:%s to:%i index:%i\n",type, to, index);
+  if(g_strcmp0(type, "candidate") !=0 ) g_print(">>> Type:%s to:%i index:%i\n",type, to, index);
 }
 
 
@@ -325,7 +325,7 @@ static void play_from_srcpad(GstElement *webrtc, GstPad *new_pad, userData *usDa
   GstPad *sinkPad = outBin->sinkpads->data;
   gst_pad_link (new_pad, sinkPad);
 
-  g_print("Creating window to display stream from peer %i in the SFU server", usDa->peerID);
+  g_print("Creating window to display stream from peer %i in the SFU server\n", usDa->peerID);
 
   gst_element_sync_state_with_parent(outBin);
 }

@@ -198,15 +198,13 @@ static void send_data_to(gchar *type, JsonObject *dataData, gint to, gint index)
 
   soup_websocket_connection_send_text(ws_conn, json_stringify(data));
 
-  if(type != "candidate") g_print(">>> Type:%s to:%i index:%i data: \n%s\n",type, to, index, json_stringify(dataData));
+  if(g_strcmp0(type, "candidate") !=0 ) g_print(">>> Type:%s to:%i index:%i\n",type, to, index);
 }
 
 
 ///////////// Negotiation ///////////////////////////////////////////////////////////////////////
 
 static void send_ice_candidate(GstElement * webrtc, guint mlineindex, gchar * candidate, userData *usDa){
-
-  g_print("Send candidate to peer:%i for webrtcbin:%i\n", usDa->peerID, usDa->index);
 
   JsonObject *ice = json_object_new ();
 
@@ -230,7 +228,7 @@ static void on_offer_created(GstPromise * promise, userData *usDa){
 
 
   gchar *sdp = gst_sdp_message_as_text (offer->sdp);
-  g_print ("Setting local desc(offer) and sending created offer:\n%s\n", sdp);
+  g_print ("Setting local desc(offer) and sending created offer\n");
 
   g_signal_emit_by_name (peers[usDa->peerID].wrbins[usDa->index].wrbin, "set-local-description", offer, NULL);
 
@@ -259,7 +257,7 @@ static void on_answer_created(GstPromise * promise, userData *usDa){
 
 
   gchar *sdp = gst_sdp_message_as_text(answer->sdp);
-  g_print ("Setting local desc(answer) and sending created answer:\n%s\n", sdp);
+  g_print ("Setting local desc(answer) and sending created answer\n");
 
   g_signal_emit_by_name (peers[usDa->peerID].wrbins[usDa->index].wrbin , "set-local-description", answer, NULL);
 
@@ -332,6 +330,8 @@ static void play_from_srcpad(GstElement *webrtc, GstPad *new_pad, userData *usDa
 //This creates a new wrbin from newWrbin_ownerPeer into the newWrbin_ownerPipe pipeline and link the entry stream as the new pad.
 static void link_newSrcPad_to_newWrbin(gint newWrbin_ownerPeer, gint newWrbin_ownerPipe){
 
+    g_print("Linking stream from peer %i to peer %i\n", newWrbin_ownerPipe, newWrbin_ownerPeer);
+
     GstPad *new_srcPad = peers[newWrbin_ownerPipe].wrbins[0].srcPad;
 
     GstElement *outBin = gst_parse_bin_from_description(
@@ -349,13 +349,13 @@ static void link_newSrcPad_to_newWrbin(gint newWrbin_ownerPeer, gint newWrbin_ow
     const gchar *sinkPad_type = gst_structure_get_name(gst_caps_get_structure (gst_pad_query_caps (sinkPad, NULL), 0));
     const gchar *new_srcPad_type = gst_structure_get_name(gst_caps_get_structure (gst_pad_query_caps (new_srcPad, NULL), 0));
 
-    if(GST_PAD_LINK_FAILED (ret)) g_print("\n\n\n\nLINK FAILED!\n\n");
+    if(GST_PAD_LINK_FAILED (ret)) g_print("\n\n\nLINK FAILED!\n\n");
     else g_print("\n\n\nLINK SUCCESFULLY!\n\n");
 
     if(gst_pad_is_linked(new_srcPad)) g_print("new_pad type:%s YES linked!\n", new_srcPad_type); 
     else g_print("new_pad type:%s NOT linked!\n", new_srcPad_type);
     if(gst_pad_is_linked(sinkPad)) g_print("sinkPad type:%s YES linked!\n\n", sinkPad_type);
-    else g_print("sinkPad type:%s NOT linked!\n\n\n\n", sinkPad_type);
+    else g_print("sinkPad type:%s NOT linked!\n\n\n", sinkPad_type);
     //if(!gst_pad_is_linked(new_pad) || !gst_pad_is_linked(new_pad)) { g_main_loop_quit(loop); return; }
 
 
@@ -392,6 +392,13 @@ static void on_pad_added(GstElement *webrtc, GstPad *new_pad, userData *usDa){
 
     link_newSrcPad_to_newWrbin(1, 2);
     link_newSrcPad_to_newWrbin(2, 1);
+
+  }if(usDa->peerID == 3){
+
+    link_newSrcPad_to_newWrbin(1, 3);
+    link_newSrcPad_to_newWrbin(2, 3);
+    link_newSrcPad_to_newWrbin(3, 1);
+    link_newSrcPad_to_newWrbin(3, 2);
   }
 }
 
@@ -463,14 +470,6 @@ static void on_sign_message(SoupWebsocketConnection *ws_conn, SoupWebsocketDataT
 
     g_print("^^^ New conected %i = %s\n",id,ip);
 
-
-    userData *usDa = getConstUsDa(id, 0);
-
-    peers[id].id = id; //init peer
-    npeers++;
-   
-    start_pipeline(usDa);
-
   }else if(g_strcmp0(type, "socketOFF")==0){
 
     JsonObject *data_data = json_object_get_object_member(data, "data");
@@ -491,8 +490,6 @@ static void on_sign_message(SoupWebsocketConnection *ws_conn, SoupWebsocketDataT
 
       JsonObject *of = json_object_get_object_member(data, "data");
       const gchar *sdpText = json_object_get_string_member(of, "sdp");
-
-      g_print("OFFER received: %s\n", json_stringify(of));
 
       userData *usDa = getConstUsDa(from, index); //this index must be 0
 
@@ -524,9 +521,6 @@ static void on_sign_message(SoupWebsocketConnection *ws_conn, SoupWebsocketDataT
     JsonObject *ans = json_object_get_object_member(data, "data");
     const gchar *sdpText = json_object_get_string_member(ans, "sdp");
 
-    g_print("Answer received:\n%s\n", sdpText);
-
-
     GstSDPMessage *sdp;
     gst_sdp_message_new(&sdp);
     gst_sdp_message_parse_buffer(sdpText, strlen(sdpText), sdp);
@@ -542,8 +536,6 @@ static void on_sign_message(SoupWebsocketConnection *ws_conn, SoupWebsocketDataT
     const gchar *candidate = json_object_get_string_member(ice, "candidate");
     //const gchar *sdpMid = json_object_get_string_member(ice, "sdpMid");
     gint sdpMLineIndex = json_object_get_int_member(ice, "sdpMLineIndex");
-
-    //g_print("%s\n", candidate);
 
     g_signal_emit_by_name (peers[from].wrbins[index].wrbin, "add-ice-candidate", sdpMLineIndex, candidate);
     

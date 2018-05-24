@@ -14,8 +14,8 @@ const SIGNALLING_SERVER_ID = -1;
 const BROADCAST = -2;
 
 const credentials = { 
-        key: fs.readFileSync(__dirname + '/certs/key.pem'),
-        cert: fs.readFileSync(__dirname + '/certs/cert.pem'),
+  key: fs.readFileSync(__dirname + '/certs/key.pem'),
+  cert: fs.readFileSync(__dirname + '/certs/cert.pem'),
 }
 const port = 3434;
 
@@ -97,14 +97,13 @@ wss.on('connection', function(socket, req) {
     catch(ex){ data = {type:"JSON_ERROR", data:msg, from:undefined, to:undefined} }
 
 
-    console.log("----------------------------------------------------------------");
     var from=data.from, to=data.to; 
     if(from==0) from="SFU"; if(to==0) to="SFU";
-    console.log("Message type:"+data.type+" from:"+from+" to:"+to+ " index:"+data.index); //console.log(data.data);
+    if(data.type != "candidate") console.log("Message type:"+data.type+" from:"+from+" to:"+to+ " index:"+data.index); //console.log(data.data);
 
     if(data.to>=0 && sockets[data.to]!=undefined) sockets[data.to].socket.send(msg);
     else if(data.to==SIGNALLING_SERVER_ID);
-    else if(data.to==BROADCAST) wss.broadcast("))) "+data.data,"txt",data.from,data.from);
+    else if(data.to==BROADCAST) wss.broadcast(data.data,data.type,data.from,data.from);
     else console.log("Destination ERROR");
     
   });
