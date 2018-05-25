@@ -43,10 +43,10 @@ function start() {
 
   if(document.getElementById('selTest').checked){
 
-    var rndStream = Math.floor((Math.random() * 3) + 1);
+    var rndStream = Math.floor((Math.random() * 4) + 1);
     if(rndStream == 1)localVideo.setAttribute('src', "videoTests/smpte.mp4");
     else if(rndStream == 2) localVideo.setAttribute('src', "videoTests/ball.mp4");
-    else if(rndStream == 3) localVideo.setAttribute('src', "videoTests/snow.mp4");
+    else localVideo.setAttribute('src', "videoTests/human.mp4");
 
     localVideo.setAttribute('type',"video/mp4");
     localVideo.play().then(function(){
