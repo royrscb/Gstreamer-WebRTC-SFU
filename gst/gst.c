@@ -2,6 +2,8 @@
  * Author: Roy Ros Cobo
  *
  * $ gcc gst.c $(pkg-config --cflags --libs gstreamer-webrtc-1.0 gstreamer-sdp-1.0 libsoup-2.4 json-glib-1.0) -o gst
+ *
+ * This application crosses the stream with the peers, the real SFU.
 */
 
 #include <gst/gst.h>

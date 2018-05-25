@@ -1,10 +1,9 @@
 // Author: Roy Ros Cobo
 
 var localVideo = document.getElementById("localVideo");
-var remoteVideos = [];
-remoteVideos[0] = document.getElementById("remoteVideo");
-remoteVideos[1] = document.getElementById("remoteVideo2");
-remoteVideos[2] = document.getElementById("remoteVideo3");
+var remoteVideos = [document.getElementById("remoteVideo"),
+                    document.getElementById("remoteVideo2"),
+                    document.getElementById("remoteVideo3")];
 
 var startButton = document.getElementById("startButton");
 var signButton = document.getElementById("signButton");
@@ -12,7 +11,7 @@ var negotiateButton = document.getElementById("negotiateButton");
 
 startButton.onclick = start;
 signButton.onclick = connectSignServer;
-negotiateButton.onclick = function(){ negotiate(0); };
+negotiateButton.onclick = function(){ negotiate(0,0); };
 
 
 ///////// Constants /////////////////////////
@@ -29,7 +28,7 @@ const configuration = {
 
 //////// Variables //////////////////////////////////////////////////
 var gstServerON = false;
-var localID, remoteID=GST_SERVER_ID;
+var localID;
 var localStream, pcs = [], wss; 
 
 
@@ -39,7 +38,7 @@ function start() {
 
   startButton.disabled = true;
   
-  createPeerConnection(0);
+  createPeerConnection(0, GST_SERVER_ID);
 
   if(document.getElementById('selTest').checked){
 
@@ -72,7 +71,7 @@ function start() {
   signButton.disabled = false;
 }
 
-function negotiate(index, to=GST_SERVER_ID){
+function negotiate(index, to){
 
   if(localID==undefined) console.log("ID not defined!");
   else{
@@ -121,14 +120,12 @@ function connectSignServer(){
       console.log(data.data);
     }else if(data.type=="socketON"){
 
-      //negotiateButton.disabled = false;
-      //if(data.from==-1) wss.send(JSON.stringify({type:"socketON",data:{id:localID},to:data.data.id}));//ultraMegaMasterPROVI
-      //remoteID = data.data.id;
-
       console.log("^^^ New conected "+data.data.id+" = "+data.data.ip);
+
     }else if(data.type=="socketOFF"){
 
       console.log("vvv Disconnected "+data.data.id+" = "+data.data.ip);
+
     }else if(data.type=="offer"){
 
       console.log('<<< OFFER '+data.index+' received:'); console.log(data.data);
@@ -183,7 +180,6 @@ function connectSignServer(){
 
     document.getElementById("id").innerHTML = "ID: undefined";
     localID = undefined;
-    remoteID = 0;
 
     startButton.disabled = false;
     negotiateButton.disabled = true;
@@ -196,7 +192,7 @@ function connectSignServer(){
   negotiateButton.disabled = true;
 }
 
-function createPeerConnection(index, to=GST_SERVER_ID){
+function createPeerConnection(index, to){
 
   console.log('Creating peer connection '+index);
   pcs[index] = new RTCPeerConnection();
@@ -210,8 +206,6 @@ function createPeerConnection(index, to=GST_SERVER_ID){
       wss.send(JSON.stringify({type:"candidate", data:ev.candidate, from: localID, to:to, index:index}));
     }
   }
-
-  //pcs[index].onnegotiationneeded = function(){negotiate(index);}
 
   pcs[index].ontrack = function(ev){
 
