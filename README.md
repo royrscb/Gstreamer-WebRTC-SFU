@@ -2,9 +2,9 @@
 # Gstreamer-WebRTC-SFU
 SFU with WebRTC usign Gstreamer
 
-```Compile gstRoy.c: gcc gst.c $(pkg-config --cflags --libs gstreamer-webrtc-1.0 gstreamer-sdp-1.0 libsoup-2.4 json-glib-1.0) -o gst```
+Compile gstRoy.c: ```gcc gst.c $(pkg-config --cflags --libs gstreamer-webrtc-1.0 gstreamer-sdp-1.0 libsoup-2.4 json-glib-1.0) -o gst```
 
-```Run signalling server: nodejs sign.js```
+Run signalling server: ```nodejs sign.js```
 
 ```diff
 - This project is not completely done.
@@ -15,8 +15,9 @@ At lines 344 and 345 there is 2 options to get the sink pad from the element cre
 After this and if this would work at line 347 is linked the new src pad with the sink pad of the element and in the end of the function the pipe with all this elements in it is synced and started.
 I think the problem is on line 339 at this code: "rtpvp8depay name=dp ! queue ! rtpvp8pay ! queue ! application/x-rtp,media=video,payload=96,encoding-name=VP8 ! webrtcbin name=newBin" where the elements are not in the right order and not the right ones.  
 At line 350 starts the debuging i used to fix this but i never ended it so if you know if some way it can works please let me know it would be so helpful since im not working anymore on this project.**
-
-
+     
+    
+     
 This is my university final project.
 
 The project consists in building a basic SFU (Selective Forward Unit) server to serve WebRTC (Web Real Time Communications) peers media streams. 
